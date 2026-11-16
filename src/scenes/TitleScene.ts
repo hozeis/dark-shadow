@@ -4,6 +4,7 @@ import { Puppet, BASE_POSE } from '../game/Puppet';
 import { ROSTER } from '../fighters/roster';
 import { FONT, GROUND_Y } from '../config';
 import { RIGS } from '../art/rigs';
+import { SPRITES } from '../art/sprites';
 import { settings, ART_STYLE_NAMES } from '../settings';
 
 export class TitleScene extends Phaser.Scene {
@@ -19,6 +20,8 @@ export class TitleScene extends Phaser.Scene {
     for (const rig of Object.values(RIGS)) {
       for (const img of rig.images) if (!this.textures.exists(img.key)) this.load.image(img.key, img.file);
     }
+    // ...and every sprite-sheet character (made by `npm run sprites`)
+    for (const s of Object.values(SPRITES)) if (!this.textures.exists(s.key)) this.load.atlas(s.key, s.image, s.atlas);
   }
 
   create() {
@@ -90,6 +93,7 @@ export class TitleScene extends Phaser.Scene {
   update(time: number) {
     const b = Math.sin(time * 0.004);
     this.hero.applyPose({ ...BASE_POSE, armF: -55 + b * 4, armB: -40, legF: -12, legB: 12, bob: b * 3 }, 1);
+    this.hero.showFrame('idle', time / 110);
     this.spirit.applyPose({ ...BASE_POSE, armF: -60 + b * 8, armB: -45, legF: -12, legB: 12, bob: b * 5 }, 1);
   }
 

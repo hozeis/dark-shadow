@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { Puppet, BASE_POSE, type Pose } from './Puppet';
+import { SPRITES } from '../art/sprites';
 import type { FighterDef, Move, Special, SpecialInput } from '../fighters/types';
 import type { Input } from './input';
 import {
@@ -18,6 +19,7 @@ export interface FighterNet {
   x: number; y: number; f: 1 | -1; st: State; t: number; hp: number; m: number; w: number;
   sp: number; po: Partial<Pose> | null; spo: Partial<Pose> | null;
   sx: number; sy: number; ss: number; sa: number; atk: string | null; d: number; sd: number;
+  gf: string | null;
 }
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -67,7 +69,14 @@ export class Fighter {
   sAlpha = SHADOW_ALPHA;
   sFollow = true;
 
-  constructor(scene: Phaser.Scene, readonly def: FighterDef, x: number, facing: 1 | -1) {
+  /**
+   * Sprite fighters: the Shadow Guardian sprite shown instead of the shadow during the
+   * ultimate, e.g. "groundBreaker-2" (null = show the normal shadow)
+   */
+  guardianFrame: string | null = null;
+  private guardian?: Phaser.GameObjects.Sprite;
+
+  constructor(private scene: Phaser.Scene, readonly def: FighterDef, x: number, facing: 1 | -1) {
     this.shadow = new Puppet(scene, def.shadowLook, x, GROUND_Y, def.shadowGlow, 0.9);
     this.shadow.addGlow(def.shadowGlow);
     this.shadow.root.setDepth(5);
@@ -91,6 +100,7 @@ export class Fighter {
     this.poseOverride = this.shadowPoseOverride = null;
     this.frozen = false;
     this.wantsUltimate = false;
+    this.guardianFrame = null;
     this.sx = x - facing * 48;
     this.sy = GROUND_Y;
     this.sScale = SHADOW_SCALE;
@@ -398,8 +408,59 @@ export class Fighter {
     }
   }
 
+  /** Can this fighter's shadow turn into the Shadow Guardian sprite for the ultimate? */
+  get hasGuardian() {
+    return this.puppet.isSprite && this.puppet.hasAnim('guardian');
+  }
+
+  /**
+   * Which sprite frame to show, worked out only from the state and its timer,
+   * so the online guest picks exactly the same frame as the host.
+   */
+  spriteFrame(time: number): [string, number] {
+    const t = this.t;
+    const inAir = this.y < GROUND_Y - 4;
+    /** spread frames over a move's startup / active / recovery */
+    const phased = (m: Move, frames: [number[], number[], number[]]) => {
+      const a = m.startup, b = m.startup + m.active;
+      const [ph, t0, dur] = t < a ? [0, 0, a] : t < b ? [1, a, m.active] : [2, b, m.recovery];
+      const list = frames[ph];
+      return list[Math.min(list.length - 1, Math.floor(((t - t0) / Math.max(1, dur)) * list.length))];
+    };
+    switch (this.state) {
+      case 'idle':
+        if (this.poseOverride) return ['summon', time / 150]; // powering up the ultimate
+        return ['idle', time / 110];
+      case 'walk': return ['walk', time / 95];
+      case 'jump': return ['jump', t < 100 ? 1 : t < 230 ? 2 : t < 400 ? 3 : 4];
+      case 'block': return ['guard', Math.min(3, t / 50)];
+      case 'punch': return ['punch', this.attack ? phased(this.attack, [[0, 1], [2, 3], [4, 5]]) : 5];
+      case 'kick': return ['kick', this.attack ? phased(this.attack, [[0, 1], [2, 3], [4, 5]]) : 5];
+      case 'special': {
+        const sp = this.special;
+        if (!sp) return ['idle', 0];
+        switch (sp.kind) {
+          case 'dash': return ['dash', phased(sp, [[3], [0, 1, 2, 0, 1, 2], [5, 6, 7]])];
+          case 'wave': return ['wave', phased(sp, [[0, 1, 2], [3], [3]])];
+          case 'rising': return ['rising', phased(sp, [[3, 4, 5], [6, 7], [8, 9]])];
+          case 'bind': return ['bind', phased(sp, [[0, 1, 2, 3], [4], [4, 3]])];
+        }
+        break;
+      }
+      case 'hit': return ['hurt', inAir || this.poseOverride || t > 80 ? 1 : 0];
+      case 'knockdown': return t < 250 ? ['knockdown', 3] : ['recovery', Math.min(5, 1 + ((t - 250) / 400) * 5)];
+      case 'ko': return ['knockdown', inAir ? 1 : 3];
+      case 'victory': return ['summon', time / 200];
+    }
+    return ['idle', 0];
+  }
+
   /** Move the drawings to match the game state. Called every frame. */
   sync(time: number, dt: number) {
+    if (this.puppet.isSprite) {
+      const [anim, i] = this.spriteFrame(time);
+      this.puppet.showFrame(anim, i); // looping animations (idle, walk...) wrap around
+    }
     const pose = this.computePose(time);
     this.puppet.root.setPosition(this.x, this.y);
     this.puppet.root.setScale(this.facing, 1);
@@ -417,12 +478,32 @@ export class Fighter {
     this.shadow.root.setPosition(this.sx, this.sy);
     this.shadow.root.setScale(this.facing * this.sScale, this.sScale);
     this.shadow.root.setAlpha(this.sAlpha);
+    this.syncGuardian();
 
     const lying = this.state === 'ko' || this.state === 'knockdown';
     const shadowPose = this.shadowPoseOverride
       ? { ...BASE_POSE, ...this.shadowPoseOverride }
       : { ...pose, tilt: lying ? 0 : pose.tilt };
     this.shadow.applyPose(shadowPose, 1 - Math.pow(this.shadowPoseOverride ? 0.6 : 0.82, dt * 60));
+  }
+
+  /** During a sprite fighter's ultimate the shadow becomes the Shadow Guardian sprite */
+  private syncGuardian() {
+    const show = !!this.guardianFrame && this.hasGuardian;
+    this.shadow.root.setVisible(!show);
+    if (!show) {
+      this.guardian?.setVisible(false);
+      return;
+    }
+    const set = SPRITES[this.def.look.sprite!];
+    if (!this.guardian) {
+      this.guardian = this.scene.add.sprite(0, 0, set.key, this.guardianFrame!);
+      const fx = (this.guardian as unknown as { postFX?: Phaser.GameObjects.Components.FX }).postFX;
+      fx?.addGlow(this.def.shadowGlow, 5, 0, false, 0.1, 12);
+    }
+    const k = set.displayScale * this.sScale * 0.6; // the guardian frames are drawn bigger than Rondo
+    this.guardian.setVisible(true).setFrame(this.guardianFrame!).setPosition(this.sx, this.sy)
+      .setScale(this.facing * k, k).setAlpha(Math.min(1, this.sAlpha + 0.05)).setDepth(this.shadow.root.depth);
   }
 
   setDepth(d: number) {
@@ -436,7 +517,7 @@ export class Fighter {
       po: this.poseOverride, spo: this.shadowPoseOverride,
       sx: r1(this.sx), sy: r1(this.sy), ss: Math.round(this.sScale * 100) / 100, sa: Math.round(this.sAlpha * 100) / 100,
       atk: this.specialInput ? `s:${this.specialInput}` : this.attack === this.def.punch ? 'punch' : this.attack === this.def.kick ? 'kick' : null,
-      d: this.puppet.root.depth, sd: this.shadow.root.depth,
+      d: this.puppet.root.depth, sd: this.shadow.root.depth, gf: this.guardianFrame,
     };
   }
 
@@ -446,6 +527,7 @@ export class Fighter {
     this.poseOverride = n.po; this.shadowPoseOverride = n.spo;
     this.sx = n.sx; this.sy = n.sy; this.sScale = n.ss; this.sAlpha = n.sa;
     this.sFollow = false; // the host already moved the shadow
+    this.guardianFrame = n.gf;
     this.specialInput = n.atk?.startsWith('s:') ? (n.atk.slice(2) as SpecialInput) : null;
     this.special = this.specialInput ? this.def.specials[this.specialInput] : null;
     this.attack = this.special ?? (n.atk === 'punch' ? this.def.punch : n.atk === 'kick' ? this.def.kick : null);

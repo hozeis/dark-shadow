@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { Look } from '../fighters/types';
 import { FONT } from '../config';
 import { RIGS, type Rig } from '../art/rigs';
+import { SPRITES, type SpriteSet } from '../art/sprites';
 import { settings } from '../settings';
 
 /**
@@ -45,7 +46,11 @@ export class Puppet {
 
   private hipY = -80;
   private shapes: { s: Shape; color: number }[] = [];
-  private images: { img: Phaser.GameObjects.Image; tint: number }[] = [];
+  private images: { img: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite; tint: number }[] = [];
+  /** Sprite-sheet mode: one animated picture instead of limbs */
+  private sprite?: Phaser.GameObjects.Sprite;
+  private spriteSet?: SpriteSet;
+  private frameName = '';
   private head?: Phaser.GameObjects.Container;
   private headFacesCamera = true;
   private letter?: Phaser.GameObjects.Text;
@@ -64,11 +69,52 @@ export class Puppet {
     this.root.add(this.rig);
 
     const style = settings.artStyle;
-    const artId = style === 'sheet' ? look.sheetArt ?? look.art : style === 'drawn' ? look.art : undefined;
+    const sprites = style === 'sprites' && look.sprite ? SPRITES[look.sprite] : undefined;
+    const artId = style === 'sprites' || style === 'sheet' ? look.sheetArt ?? look.art : style === 'drawn' ? look.art : undefined;
     const art = artId ? RIGS[artId] : undefined;
     this.drawn = !!art && art.images.every((i) => scene.textures.exists(i.key));
-    if (this.drawn) this.buildDrawn(art!);
+    if (sprites && scene.textures.exists(sprites.key)) {
+      this.drawn = true;
+      this.buildSprite(sprites);
+    } else if (this.drawn) this.buildDrawn(art!);
     else this.buildShapes(look);
+  }
+
+  get isSprite() {
+    return !!this.sprite;
+  }
+
+  /** Does the sprite sheet have this animation? */
+  hasAnim(anim: string) {
+    return !!this.spriteSet?.anims[anim];
+  }
+
+  /** Show one frame of a sprite animation (the index wraps around). */
+  showFrame(anim: string, index: number) {
+    const n = this.spriteSet?.anims[anim];
+    if (!this.sprite || !n) return;
+    const name = `${anim}-${((Math.floor(index) % n) + n) % n}`;
+    if (name !== this.frameName) {
+      this.frameName = name;
+      this.sprite.setFrame(name); // the atlas tells Phaser where the feet are
+    }
+  }
+
+  /** Build the body from a sprite sheet: one picture that changes frames. */
+  private buildSprite(set: SpriteSet) {
+    this.spriteSet = set;
+    this.sprite = this.scene.add.sprite(0, 0, set.key, 'idle-0').setScale(set.displayScale);
+    this.frameName = 'idle-0';
+    this.images.push({ img: this.sprite, tint: 0xffffff });
+    // invisible limbs, so poses can still be set (they just don't show)
+    const c = () => this.scene.add.container(0, 0);
+    this.legB = c();
+    this.legF = c();
+    this.armB = c();
+    this.armF = c();
+    this.upper = c();
+    this.upper.add([this.armB, this.armF]);
+    this.rig.add([this.sprite, this.legB, this.legF, this.upper]);
   }
 
   /** Build the body from pieces of the hand drawing. */
@@ -189,7 +235,7 @@ export class Puppet {
     this.legB.angle = p.legB;
     this.upper.angle = p.lean;
     this.upper.y = this.hipY + p.bob;
-    this.rig.angle = p.tilt + spin;
+    this.rig.angle = this.sprite ? spin : p.tilt + spin; // sprite frames already lie down on their own
   }
 
   /** Keep the cap letter readable when the body is mirrored. */

@@ -49,15 +49,16 @@ function specials(
 
 export const ROSTER: FighterDef[] = [
   {
-    // From the drawing (and the character sheet): R with his cap and the masked giant behind him
+    // Rondo: from the drawing (R with his cap and the masked giant), the character sheet and the sprite sheets
     id: 'r',
-    name: 'R',
+    name: 'Rondo',
     shadowName: 'Shadow Spirit',
     look: {
       skin: 0xc68863, shirt: 0x55555c, pants: 0x3e3e44, shoes: 0x1d1d22,
       head: 'cap', accent: 0x1f1f24, letter: 'R', belt: 0x1a1a1e,
       art: 'r', // his drawing!
       sheetArt: 'r-sheet', // the character sheet
+      sprite: 'rondo', // the sprite sheets (animated)
     },
     shadowLook: {
       skin: 0x4c4a52, shirt: 0x4c4a52, pants: 0xf2c230, shoes: 0x6d6d76,

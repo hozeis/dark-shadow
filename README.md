@@ -22,7 +22,7 @@ Open http://localhost:5173
 | Player 1 | W A S D (S = block) | F | G | R | H |
 | Player 2 | Arrow keys (↓ = block) | J | K | U | L |
 
-**Special moves:** press Special alone or with a direction. R's moves (from his character sheet):
+**Special moves:** press Special alone or with a direction. Rondo's moves (from his character sheet):
 
 | Press | Move | What it does |
 |---|---|---|
@@ -77,9 +77,20 @@ The two devices connect directly (WebRTC via the free PeerJS service). The playe
 
 Digital art on a dark background works too (see `r-sheet` in `art/characters.mjs`): set `source: 'sheet'`, `mirror: true` if the figure faces left, and `faceCamera: false` for a 3/4 or side view. Then use `sheetArt: '<id>'` in the fighter's look.
 
+### From a sprite sheet (animated)
+
+Rondo is animated from sprite sheets (`art/drawings/rondo-basic-sheet.webp` and `rondo-moves-sheet.webp`):
+
+1. In `art/sprites.mjs`, list each animation: the strip of the sheet it's on (`y`), where each frame is (`cells`) and the floor line (`base`).
+2. Run `npm run sprites`. It cuts every frame, lines them up by the feet and packs them into `public/art/<id>/atlas.png`.
+3. In `src/fighters/roster.ts`, add `sprite: '<id>'` to the fighter's `look`.
+
+Which frame plays when (punch, kick, specials, getting hit...) is decided in `spriteFrame()` in `src/game/Fighter.ts`.
+During the ultimate, the shadow turns into the **Shadow Guardian** from the sheet (see `ultQuake` in `src/scenes/FightScene.ts`).
+
 ### Art styles
 
-Press **T** on the title screen to cycle: **SHEET** (character-sheet art), **HAND-DRAWN** (the original drawing) and **SHAPES** (the original shape style).
+Press **T** on the title screen to cycle: **SPRITES** (animated sprite sheets), **SHEET** (character-sheet puppet), **HAND-DRAWN** (the original drawing) and **SHAPES** (the original shape style).
 The shape-only version is also saved in git as the tag `shape-style-v1`.
 
 ## Publish an update

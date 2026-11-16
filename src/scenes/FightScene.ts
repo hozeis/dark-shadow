@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Fighter, type FighterNet } from '../game/Fighter';
 import { ROSTER } from '../fighters/roster';
 import type { Special, SpecialInput } from '../fighters/types';
+import { SPRITES } from '../art/sprites';
 import { drawStage } from '../game/stage';
 import {
   makeKeys, readKeys, mergeInputs, NO_INPUT, NetInputDecoder, NetInputEncoder, type KeySet, type Input,
@@ -34,6 +35,7 @@ type Fx =
 interface Wave {
   id: number; owner: Fighter; x: number; y: number; dir: 1 | -1; move: Special;
   gfx: Phaser.GameObjects.Container;
+  sprite?: Phaser.GameObjects.Sprite; // sprite fighters shoot their own animated blast
 }
 
 /** Shadow chains holding someone */
@@ -456,6 +458,19 @@ export class FightScene extends Phaser.Scene {
   /** Shadow punches the ground, a rock spike launches the enemy, then the shadow kicks them away. */
   private ultQuake(a: Fighter, v: Fighter) {
     const f = a.facing;
+    if (a.hasGuardian) {
+      // sprite fighters: the shadow becomes the Shadow Guardian from the sprite sheet
+      const g = (ms: number, frame: string) => this.at(ms, () => (a.guardianFrame = frame));
+      a.guardianFrame = 'guardian-0';
+      g(650, 'groundBreaker-0');
+      g(820, 'groundBreaker-1');
+      g(1000, 'groundBreaker-2'); // fists smash the ground
+      g(1250, 'groundBreaker-8');
+      g(1420, 'overdrive-9'); // flying kick
+      g(1560, 'overdrive-10');
+      g(1900, 'groundBreaker-8');
+      g(2250, 'guardian-0');
+    }
     this.at(650, () => {
       a.shadowPoseOverride = { armF: -175, armB: -150, lean: -12, bob: -6 };
     });
@@ -529,6 +544,7 @@ export class FightScene extends Phaser.Scene {
       f.setDepth(10);
     }
     a.shadowPoseOverride = null;
+    a.guardianFrame = null;
     a.shadow.root.setDepth(5);
     a.setState('idle');
     v.setState(v.hp <= 0 ? 'ko' : 'knockdown');
@@ -561,14 +577,22 @@ export class FightScene extends Phaser.Scene {
 
   private spawnWave(id: number, owner: Fighter, x: number, y: number, dir: 1 | -1, move: Special) {
     const c = owner.def.shadowGlow;
-    const glow = this.add.ellipse(0, 0, 120, 70, c, 0.35);
-    const mid = this.add.ellipse(6 * dir, 0, 80, 46, c, 0.8);
-    const core = this.add.ellipse(14 * dir, 0, 44, 26, 0xffffff, 1);
-    const gfx = this.add.container(x, y, [glow, mid, core]).setDepth(30);
+    const set = owner.def.look.sprite ? SPRITES[owner.def.look.sprite] : undefined;
+    let gfx: Phaser.GameObjects.Container;
+    let sprite: Phaser.GameObjects.Sprite | undefined;
+    if (owner.puppet.isSprite && set && owner.puppet.hasAnim('waveFx')) {
+      sprite = this.add.sprite(0, 0, set.key, 'waveFx-0').setScale(set.displayScale).setFlipX(dir < 0);
+      gfx = this.add.container(x, y, [sprite]).setDepth(30);
+    } else {
+      const glow = this.add.ellipse(0, 0, 120, 70, c, 0.35);
+      const mid = this.add.ellipse(6 * dir, 0, 80, 46, c, 0.8);
+      const core = this.add.ellipse(14 * dir, 0, 44, 26, 0xffffff, 1);
+      gfx = this.add.container(x, y, [glow, mid, core]).setDepth(30);
+      this.tweens.add({ targets: glow, scaleX: 1.25, scaleY: 0.8, yoyo: true, repeat: -1, duration: 90 });
+    }
     gfx.setScale(0.3);
     this.tweens.add({ targets: gfx, scale: 1, duration: 120, ease: 'Back.easeOut' });
-    this.tweens.add({ targets: glow, scaleX: 1.25, scaleY: 0.8, yoyo: true, repeat: -1, duration: 90 });
-    this.waves.push({ id, owner, x, y, dir, move, gfx });
+    this.waves.push({ id, owner, x, y, dir, move, gfx, sprite });
     owner.waveAlive = true;
   }
 
@@ -629,6 +653,7 @@ export class FightScene extends Phaser.Scene {
   }
 
   private waveTrail(w: Wave) {
+    w.sprite?.setFrame(`waveFx-${Math.floor(this.time.now / 70) % 4}`);
     if (Math.random() < 0.5) return;
     const d = this.add.circle(w.x - w.dir * 40, w.y + (Math.random() - 0.5) * 40, 6 + Math.random() * 8, w.owner.def.shadowGlow, 0.7).setDepth(29);
     this.tweens.add({ targets: d, x: d.x - w.dir * 60, alpha: 0, scale: 0.2, duration: 260, onComplete: () => d.destroy() });

@@ -1,0 +1,30 @@
+{
+  "rondo": {
+    "key": "rondo-sprites",
+    "image": "art/rondo/atlas.png",
+    "atlas": "art/rondo/atlas.json",
+    "displayScale": 2.2472,
+    "anims": {
+      "idle": 7,
+      "walk": 7,
+      "run": 7,
+      "jump": 6,
+      "crouch": 4,
+      "guard": 4,
+      "punch": 6,
+      "kick": 6,
+      "hurt": 4,
+      "knockdown": 6,
+      "recovery": 6,
+      "dash": 8,
+      "wave": 4,
+      "waveFx": 4,
+      "rising": 10,
+      "bind": 5,
+      "summon": 2,
+      "guardian": 1,
+      "groundBreaker": 9,
+      "overdrive": 17
+    }
+  }
+}

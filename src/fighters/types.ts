@@ -16,6 +16,7 @@ export interface Look {
   stripe?: number; // mask stripe color
   art?: string; // id of a hand-drawn rig in src/art/rigs.json (made by `npm run art`)
   sheetArt?: string; // id of a rig cut from a character sheet (used by the "SHEET" art style)
+  sprite?: string; // id of a sprite-sheet character in src/art/sprites.json (made by `npm run sprites`)
 }
 
 export interface Move {
