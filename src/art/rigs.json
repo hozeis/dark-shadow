@@ -188,5 +188,209 @@
         ]
       }
     }
+  },
+  "r-sheet": {
+    "displayScale": 0.83,
+    "faceCamera": false,
+    "hip": [
+      2.49,
+      -117.03
+    ],
+    "images": [
+      {
+        "key": "r-sheet-head",
+        "file": "art/r-sheet/head.png"
+      },
+      {
+        "key": "r-sheet-torso",
+        "file": "art/r-sheet/torso.png"
+      },
+      {
+        "key": "r-sheet-armNear",
+        "file": "art/r-sheet/armNear.png"
+      },
+      {
+        "key": "r-sheet-armFar",
+        "file": "art/r-sheet/armFar.png"
+      },
+      {
+        "key": "r-sheet-legFar",
+        "file": "art/r-sheet/legFar.png"
+      },
+      {
+        "key": "r-sheet-legNear",
+        "file": "art/r-sheet/legNear.png"
+      }
+    ],
+    "slots": {
+      "legB": {
+        "image": "r-sheet-legFar",
+        "pos": [
+          14.94,
+          -112.88
+        ],
+        "origin": [
+          0.4603,
+          0.0769
+        ]
+      },
+      "legF": {
+        "image": "r-sheet-legNear",
+        "pos": [
+          -9.96,
+          -112.88
+        ],
+        "origin": [
+          0.5692,
+          0.0769
+        ]
+      },
+      "torso": {
+        "image": "r-sheet-torso",
+        "pos": [
+          0,
+          0
+        ],
+        "origin": [
+          0.5278,
+          0.907
+        ]
+      },
+      "head": {
+        "image": "r-sheet-head",
+        "pos": [
+          4.15,
+          -58.93
+        ],
+        "origin": [
+          0.4561,
+          0.8704
+        ]
+      },
+      "armB": {
+        "image": "r-sheet-armFar",
+        "pos": [
+          22.41,
+          -47.31
+        ],
+        "origin": [
+          0.4,
+          0.1078
+        ]
+      },
+      "armF": {
+        "image": "r-sheet-armNear",
+        "pos": [
+          -22.41,
+          -48.14
+        ],
+        "origin": [
+          0.5116,
+          0.1321
+        ]
+      }
+    }
+  },
+  "r-sheet-shadow": {
+    "displayScale": 0.415,
+    "faceCamera": false,
+    "hip": [
+      0,
+      -116.2
+    ],
+    "images": [
+      {
+        "key": "r-sheet-shadow-head",
+        "file": "art/r-sheet-shadow/head.png"
+      },
+      {
+        "key": "r-sheet-shadow-torso",
+        "file": "art/r-sheet-shadow/torso.png"
+      },
+      {
+        "key": "r-sheet-shadow-armNear",
+        "file": "art/r-sheet-shadow/armNear.png"
+      },
+      {
+        "key": "r-sheet-shadow-armFar",
+        "file": "art/r-sheet-shadow/armFar.png"
+      },
+      {
+        "key": "r-sheet-shadow-legFar",
+        "file": "art/r-sheet-shadow/legFar.png"
+      },
+      {
+        "key": "r-sheet-shadow-legNear",
+        "file": "art/r-sheet-shadow/legNear.png"
+      }
+    ],
+    "slots": {
+      "legB": {
+        "image": "r-sheet-shadow-legFar",
+        "pos": [
+          8.3,
+          -112.05
+        ],
+        "origin": [
+          0.4868,
+          0.0774
+        ]
+      },
+      "legF": {
+        "image": "r-sheet-shadow-legNear",
+        "pos": [
+          -9.96,
+          -112.05
+        ],
+        "origin": [
+          0.6034,
+          0.0774
+        ]
+      },
+      "torso": {
+        "image": "r-sheet-shadow-torso",
+        "pos": [
+          0,
+          0
+        ],
+        "origin": [
+          0.5077,
+          0.9091
+        ]
+      },
+      "head": {
+        "image": "r-sheet-shadow-head",
+        "pos": [
+          1.66,
+          -58.1
+        ],
+        "origin": [
+          0.4884,
+          0.902
+        ]
+      },
+      "armB": {
+        "image": "r-sheet-shadow-armFar",
+        "pos": [
+          18.26,
+          -43.16
+        ],
+        "origin": [
+          0.3571,
+          0.1391
+        ]
+      },
+      "armF": {
+        "image": "r-sheet-shadow-armNear",
+        "pos": [
+          -24.9,
+          -48.14
+        ],
+        "origin": [
+          0.52,
+          0.1575
+        ]
+      }
+    }
   }
 }

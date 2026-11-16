@@ -9,7 +9,7 @@ export function isTouchDevice(game: Phaser.Game) {
 
 interface Button {
   x: number; y: number; r: number;
-  key: 'punch' | 'kick' | 'ult';
+  key: 'punch' | 'kick' | 'special' | 'ult';
   gfx: Phaser.GameObjects.Arc;
   label: Phaser.GameObjects.Text;
   pointer: number | null;
@@ -19,7 +19,8 @@ interface Button {
 
 /**
  * On-screen controls for phones: a joystick on the left (appears where your thumb
- * lands) and Punch / Kick / Shadow buttons on the right.
+ * lands) and Punch / Kick / Special / Shadow buttons on the right.
+ * Special + a joystick direction picks which special move comes out.
  */
 export class TouchScene extends Phaser.Scene {
   private stickPointer: number | null = null;
@@ -59,6 +60,7 @@ export class TouchScene extends Phaser.Scene {
     this.addButton(1020, 600, 58, 'punch', 'PUNCH', 0xffd23f);
     this.addButton(1150, 515, 58, 'kick', 'KICK', 0xff7a1a);
     this.addButton(1175, 650, 46, 'ult', 'SHADOW', 0x9b7bff);
+    this.addButton(1000, 465, 50, 'special', 'SPECIAL', 0x4fd1ff);
 
     const menu = this.add.text(640, 120, 'MENU', {
       fontFamily: FONT, fontSize: '22px', color: '#ffffff', stroke: '#000', strokeThickness: 4,

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Fighter, type FighterNet } from '../game/Fighter';
 import { ROSTER } from '../fighters/roster';
+import type { Special, SpecialInput } from '../fighters/types';
 import { drawStage } from '../game/stage';
 import {
   makeKeys, readKeys, mergeInputs, NO_INPUT, NetInputDecoder, NetInputEncoder, type KeySet, type Input,
@@ -9,7 +10,7 @@ import { net, type NetMessage } from '../net/NetSession';
 import { isTouchDevice, type TouchScene } from './TouchScene';
 import { CpuBrain } from '../game/cpu';
 import {
-  GAME_W, GAME_H, GROUND_Y, STAGE_LEFT, STAGE_RIGHT, P1_KEYS, P2_KEYS,
+  GAME_W, GAME_H, GROUND_Y, STAGE_LEFT, STAGE_RIGHT, P1_KEYS, P2_KEYS, FONT,
   SHADOW_SCALE, SHADOW_ALPHA, ROUND_TIME, WINS_NEEDED,
 } from '../config';
 
@@ -23,11 +24,25 @@ type Fx =
   | { k: 'dust'; x: number; y: number }
   | { k: 'spike'; x: number }
   | { k: 'shake'; d: number; i: number }
-  | { k: 'flash'; p: 1 | 2; c: number; ms: number };
+  | { k: 'flash'; p: 1 | 2; c: number; ms: number }
+  | { k: 'label'; p: 1 | 2; d: SpecialInput }
+  | { k: 'rocks'; x: number; c: number }
+  | { k: 'bind'; p: 1 | 2; ms: number }
+  | { k: 'burst'; x: number; y: number; c: number };
+
+/** An energy wave flying across the screen */
+interface Wave {
+  id: number; owner: Fighter; x: number; y: number; dir: 1 | -1; move: Special;
+  gfx: Phaser.GameObjects.Container;
+}
+
+/** Shadow chains holding someone */
+interface Chain { a: Fighter; v: Fighter; until: number }
 
 interface Snapshot {
   t: 's'; rs: RoundState; tl: number; ann: Announcement; ban: Banner;
   cam: [number, number, number]; ov: number; f: [FighterNet, FighterNet]; fx: Fx[];
+  wv: [number, number, number, 1 | -1, 1 | 2][]; // energy waves: id, x, y, dir, owner
 }
 export interface Announcement { id: number; text: string; color: string; hold: boolean }
 export interface Banner { id: number; title: string; sub: string; color: number }
@@ -58,6 +73,11 @@ export class FightScene extends Phaser.Scene {
   private snapshot: Snapshot | null = null;
   private lastSent = 0;
   private leaving = false;
+  // special moves
+  private waves: Wave[] = [];
+  private waveId = 0;
+  private chains: Chain[] = [];
+  private chainGfx!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super('Fight');
@@ -68,6 +88,8 @@ export class FightScene extends Phaser.Scene {
     this.fxQueue = [];
     this.snapshot = null;
     this.leaving = false;
+    this.waves = [];
+    this.chains = [];
     this.remote = new NetInputDecoder();
     this.round = 1;
     this.roundState = 'intro';
@@ -79,6 +101,7 @@ export class FightScene extends Phaser.Scene {
   create() {
     drawStage(this);
     this.overlay = this.add.rectangle(GAME_W / 2, GAME_H / 2, 5000, 4000, 0x05000d, 1).setAlpha(0).setDepth(50);
+    this.chainGfx = this.add.graphics().setDepth(9);
 
     this.p1 = new Fighter(this, ROSTER[0], 380, 1);
     this.p2 = new Fighter(this, ROSTER[1], 900, -1);
@@ -129,7 +152,10 @@ export class FightScene extends Phaser.Scene {
       if (m.t === 'in') this.remote.push(m.i);
       else if (m.t === 'rematch' && this.roundState === 'matchEnd') this.scene.restart({ mode: this.mode });
     } else if (m.t === 's') {
-      this.snapshot = m as unknown as Snapshot;
+      // keep the effects of a snapshot we haven't drawn yet (two can arrive in one frame)
+      const snap = m as unknown as Snapshot;
+      if (this.snapshot) snap.fx = [...this.snapshot.fx, ...snap.fx];
+      this.snapshot = snap;
     }
   }
 
@@ -160,6 +186,7 @@ export class FightScene extends Phaser.Scene {
   }
 
   private startRound() {
+    this.clearSpecials();
     this.p1.reset(380, 1);
     this.p2.reset(900, -1);
     this.timeLeft = ROUND_TIME;
@@ -213,6 +240,9 @@ export class FightScene extends Phaser.Scene {
     this.p2.update(dt, fighting ? k2 : NO_INPUT, this.p1);
     this.separate();
 
+    for (const f of [this.p1, this.p2]) this.specialEvents(f);
+    this.updateWaves(dt);
+
     if (fighting) {
       this.resolveHit(this.p1, this.p2);
       this.resolveHit(this.p2, this.p1);
@@ -224,6 +254,7 @@ export class FightScene extends Phaser.Scene {
 
     this.p1.sync(time, dt);
     this.p2.sync(time, dt);
+    this.specialVisuals(time);
 
     if (this.roundState === 'fight') {
       this.timeLeft -= dt;
@@ -252,6 +283,7 @@ export class FightScene extends Phaser.Scene {
       ov: Math.round(this.overlay.alpha * 100) / 100,
       f: [this.p1.toNet(), this.p2.toNet()],
       fx: this.fxQueue,
+      wv: this.waves.map((w) => [w.id, Math.round(w.x), Math.round(w.y), w.dir, w.owner === this.p1 ? 1 : 2]),
     };
     this.fxQueue = [];
     s.send(snap as unknown as NetMessage);
@@ -274,9 +306,11 @@ export class FightScene extends Phaser.Scene {
       this.p1.fromNet(snap.f[0]);
       this.p2.fromNet(snap.f[1]);
       for (const fx of snap.fx) this.playFx(fx);
+      this.syncWaves(snap.wv);
     }
     this.p1.sync(time, dt);
     this.p2.sync(time, dt);
+    this.specialVisuals(time);
   }
 
   private record(fx: Fx) {
@@ -290,6 +324,10 @@ export class FightScene extends Phaser.Scene {
       case 'spike': this.spike(fx.x); break;
       case 'shake': this.shake(fx.d, fx.i); break;
       case 'flash': this.flash(fx.p === 1 ? this.p1 : this.p2, fx.c, fx.ms); break;
+      case 'label': { const f = fx.p === 1 ? this.p1 : this.p2; this.specialLabel(f, f.def.specials[fx.d]); break; }
+      case 'rocks': this.rocks(fx.x, fx.c); break;
+      case 'bind': { const a = fx.p === 1 ? this.p1 : this.p2; this.bind(a, a === this.p1 ? this.p2 : this.p1, fx.ms); break; }
+      case 'burst': this.burst(fx.x, fx.y, fx.c); break;
     }
   }
 
@@ -338,8 +376,10 @@ export class FightScene extends Phaser.Scene {
     } else {
       a.addMeter(move.damage * 1.2);
       this.flash(b);
-      this.sparks(px, py, 0xffdd44, res === 'ko' ? 18 : 10, res === 'ko');
-      this.hitstop = res === 'ko' ? 260 : 70;
+      const special = a.special;
+      this.sparks(px, py, special ? a.def.shadowGlow : 0xffdd44, res === 'ko' ? 18 : special ? 14 : 10, res === 'ko' || !!special);
+      if (special?.kind === 'bind' && res === 'hit') this.bind(a, b, special.hitstun);
+      this.hitstop = res === 'ko' ? 260 : special ? 90 : 70;
       this.shake(res === 'ko' ? 400 : 100, res === 'ko' ? 0.015 : 0.004);
     }
   }
@@ -375,10 +415,12 @@ export class FightScene extends Phaser.Scene {
     a.meter = 0;
     this.roundState = 'cinematic';
 
+    this.clearSpecials();
     for (const f of [a, v]) {
       f.frozen = true;
       f.vx = f.vy = 0;
       f.attack = null;
+      f.special = f.specialInput = null;
     }
     a.facing = v.x >= a.x ? 1 : -1;
     v.facing = a.facing === 1 ? -1 : 1;
@@ -491,6 +533,218 @@ export class FightScene extends Phaser.Scene {
     a.setState('idle');
     v.setState(v.hp <= 0 ? 'ko' : 'knockdown');
     this.roundState = 'fight'; // update() will notice a KO and end the round
+  }
+
+  // ============================================================
+  //  SPECIAL MOVES
+  // ============================================================
+
+  private pIndex(f: Fighter): 1 | 2 {
+    return f === this.p1 ? 1 : 2;
+  }
+
+  /** React to what a fighter just did (host / offline only). */
+  private specialEvents(f: Fighter) {
+    const sp = f.justUsed;
+    if (sp) {
+      f.justUsed = null;
+      this.record({ k: 'label', p: this.pIndex(f), d: f.specialInput ?? 'neutral' });
+      this.specialLabel(f, sp);
+      if (sp.kind === 'rising') this.rocks(f.x, f.def.shadowGlow);
+    }
+    if (f.fireWave) {
+      f.fireWave = false;
+      const move = f.special ?? f.def.specials.neutral;
+      this.spawnWave(++this.waveId, f, f.x + f.facing * move.reach, f.y - move.height, f.facing, move);
+    }
+  }
+
+  private spawnWave(id: number, owner: Fighter, x: number, y: number, dir: 1 | -1, move: Special) {
+    const c = owner.def.shadowGlow;
+    const glow = this.add.ellipse(0, 0, 120, 70, c, 0.35);
+    const mid = this.add.ellipse(6 * dir, 0, 80, 46, c, 0.8);
+    const core = this.add.ellipse(14 * dir, 0, 44, 26, 0xffffff, 1);
+    const gfx = this.add.container(x, y, [glow, mid, core]).setDepth(30);
+    gfx.setScale(0.3);
+    this.tweens.add({ targets: gfx, scale: 1, duration: 120, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: glow, scaleX: 1.25, scaleY: 0.8, yoyo: true, repeat: -1, duration: 90 });
+    this.waves.push({ id, owner, x, y, dir, move, gfx });
+    owner.waveAlive = true;
+  }
+
+  private removeWave(w: Wave, burst: boolean) {
+    if (burst) this.burst(w.x, w.y, w.owner.def.shadowGlow);
+    w.gfx.destroy();
+    this.waves = this.waves.filter((o) => o !== w);
+    w.owner.waveAlive = this.waves.some((o) => o.owner === w.owner);
+  }
+
+  private updateWaves(dt: number) {
+    for (const w of [...this.waves]) {
+      w.x += w.dir * 720 * dt;
+      w.gfx.setPosition(w.x, w.y);
+      this.waveTrail(w);
+      if (w.x < STAGE_LEFT - 120 || w.x > STAGE_RIGHT + 120) {
+        this.removeWave(w, false);
+        continue;
+      }
+      // two waves cancel each other out
+      const other = this.waves.find((o) => o !== w && o.owner !== w.owner && Math.abs(o.x - w.x) < 60 && Math.abs(o.y - w.y) < 60);
+      if (other) {
+        this.removeWave(other, true);
+        this.removeWave(w, true);
+        continue;
+      }
+      const v = w.owner === this.p1 ? this.p2 : this.p1;
+      const hu = v.hurtbox();
+      if (this.roundState === 'fight' && hu && w.x + 35 > hu.x && w.x - 35 < hu.x + hu.w && w.y + 30 > hu.y && w.y - 30 < hu.y + hu.h) {
+        const res = v.takeHit(w.move, w.owner, w.dir);
+        this.removeWave(w, true);
+        if (res !== 'block') {
+          w.owner.addMeter(w.move.damage * 1.2);
+          this.flash(v);
+          this.shake(res === 'ko' ? 400 : 140, res === 'ko' ? 0.015 : 0.006);
+          this.hitstop = res === 'ko' ? 260 : 80;
+        } else this.hitstop = 40;
+      }
+    }
+  }
+
+  /** Guest: make the energy waves match the host's. */
+  private syncWaves(list: Snapshot['wv']) {
+    const ids = new Set(list.map((w) => w[0]));
+    for (const w of [...this.waves]) if (!ids.has(w.id)) this.removeWave(w, false);
+    for (const [id, x, y, dir, p] of list) {
+      const w = this.waves.find((o) => o.id === id);
+      if (w) {
+        w.x = x;
+        w.y = y;
+        w.gfx.setPosition(x, y);
+        this.waveTrail(w);
+      } else {
+        const owner = p === 1 ? this.p1 : this.p2;
+        this.spawnWave(id, owner, x, y, dir, owner.def.specials.neutral);
+      }
+    }
+  }
+
+  private waveTrail(w: Wave) {
+    if (Math.random() < 0.5) return;
+    const d = this.add.circle(w.x - w.dir * 40, w.y + (Math.random() - 0.5) * 40, 6 + Math.random() * 8, w.owner.def.shadowGlow, 0.7).setDepth(29);
+    this.tweens.add({ targets: d, x: d.x - w.dir * 60, alpha: 0, scale: 0.2, duration: 260, onComplete: () => d.destroy() });
+  }
+
+  private bind(a: Fighter, v: Fighter, ms: number) {
+    this.record({ k: 'bind', p: this.pIndex(a), ms });
+    this.chains = this.chains.filter((c) => c.v !== v);
+    this.chains.push({ a, v, until: this.time.now + ms });
+  }
+
+  private clearSpecials() {
+    for (const w of [...this.waves]) this.removeWave(w, false);
+    this.chains = [];
+    this.chainGfx?.clear();
+  }
+
+  /** Effects that come straight from what the fighters are doing (works the same online). */
+  private specialVisuals(time: number) {
+    const g = this.chainGfx;
+    g.clear();
+    this.chains = this.chains.filter((c) => time < c.until && c.v.state === 'hit');
+    for (const f of [this.p1, this.p2]) {
+      const sp = f.state === 'special' ? f.special : null;
+      if (!sp) continue;
+      const active = f.t >= sp.startup && f.t < sp.startup + sp.active;
+      if (sp.kind === 'dash' && active) this.speedLines(f);
+      if (sp.kind === 'rising' && active) this.risingSparks(f);
+      if (sp.kind === 'bind' && f.t >= sp.startup && !this.chains.some((c) => c.a === f)) {
+        // chains reaching out
+        const len = sp.reach * Math.min(1, ((f.t - sp.startup) / sp.active) * 1.6);
+        const [hx, hy] = this.shadowHand(f);
+        this.drawChain(hx, hy, f.x + f.facing * (20 + len), f.y - sp.height, f.def.shadowGlow, time);
+      }
+    }
+    for (const c of this.chains) {
+      const [hx, hy] = this.shadowHand(c.a);
+      this.drawChain(hx, hy, c.v.x, c.v.y - 110, c.a.def.shadowGlow, time);
+      this.drawChain(hx, hy - 30, c.v.x, c.v.y - 70, c.a.def.shadowGlow, time + 400);
+    }
+  }
+
+  private shadowHand(f: Fighter): [number, number] {
+    return [f.sx + f.facing * 70 * f.sScale, f.sy - 130 * f.sScale];
+  }
+
+  private drawChain(x0: number, y0: number, x1: number, y1: number, color: number, time: number) {
+    const g = this.chainGfx;
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    if (len < 4) return;
+    const nx = -(y1 - y0) / len, ny = (x1 - x0) / len;
+    const pt = (p: number): [number, number] => {
+      const wave = Math.sin(p * 9 + time * 0.012) * 10 * Math.sin(Math.PI * p);
+      return [x0 + (x1 - x0) * p + nx * wave, y0 + (y1 - y0) * p + ny * wave];
+    };
+    g.lineStyle(12, color, 0.25).beginPath();
+    for (let i = 0; i <= 24; i++) {
+      const [x, y] = pt(i / 24);
+      if (i === 0) g.moveTo(x, y);
+      else g.lineTo(x, y);
+    }
+    g.strokePath();
+    const links = Math.floor(len / 13);
+    for (let i = 0; i <= links; i++) {
+      const [x, y] = pt(i / Math.max(1, links));
+      g.lineStyle(3, 0x000000, 0.6).strokeCircle(x, y, i % 2 ? 4 : 6);
+      g.lineStyle(2, i % 2 ? 0xffffff : color, 1).strokeCircle(x, y, i % 2 ? 4 : 6);
+    }
+  }
+
+  private speedLines(f: Fighter) {
+    const c = f.def.shadowGlow;
+    for (let i = 0; i < 2; i++) {
+      const y = f.y - 30 - Math.random() * 150;
+      const l = this.add.rectangle(f.x - f.facing * (30 + Math.random() * 30), y, 50 + Math.random() * 60, 4, i ? 0xffffff : c, 0.8).setDepth(8);
+      this.tweens.add({ targets: l, x: l.x - f.facing * 80, alpha: 0, scaleX: 0.3, duration: 220, onComplete: () => l.destroy() });
+    }
+  }
+
+  private risingSparks(f: Fighter) {
+    const x = f.x + f.facing * 25, y = f.y - 210;
+    const s = this.add.circle(x + (Math.random() - 0.5) * 30, y + Math.random() * 60, 4 + Math.random() * 5, f.def.shadowGlow, 0.9).setDepth(31);
+    this.tweens.add({ targets: s, y: s.y + 60, alpha: 0, duration: 300, onComplete: () => s.destroy() });
+  }
+
+  /** Big name of the special above the fighter, so everyone learns the moves */
+  private specialLabel(f: Fighter, sp: Special) {
+    const color = Phaser.Display.Color.IntegerToColor(f.def.shadowGlow).rgba;
+    const t = this.add.text(f.x, f.y - 250, sp.name.toUpperCase() + '!', {
+      fontFamily: FONT, fontSize: '34px', color, stroke: '#000', strokeThickness: 6,
+    }).setOrigin(0.5).setDepth(85).setScale(0.6);
+    this.tweens.add({ targets: t, scale: 1, duration: 140, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: t, y: t.y - 40, alpha: 0, delay: 500, duration: 350, onComplete: () => t.destroy() });
+  }
+
+  private rocks(x: number, color: number) {
+    this.record({ k: 'rocks', x: Math.round(x), c: color });
+    this.dust(x, GROUND_Y);
+    for (let i = 0; i < 9; i++) {
+      const r = this.add.rectangle(x + (Math.random() - 0.5) * 60, GROUND_Y - 8, 8 + Math.random() * 10, 8 + Math.random() * 10, i % 3 ? 0x4a4550 : color).setDepth(66);
+      this.tweens.add({
+        targets: r, x: r.x + (Math.random() - 0.5) * 220, y: GROUND_Y - 80 - Math.random() * 160,
+        angle: 360, alpha: 0, duration: 520, ease: 'Quad.easeOut', onComplete: () => r.destroy(),
+      });
+    }
+  }
+
+  private burst(x: number, y: number, color: number) {
+    this.record({ k: 'burst', x: Math.round(x), y: Math.round(y), c: color });
+    const ring = this.add.circle(x, y, 18).setStrokeStyle(6, color).setDepth(80);
+    this.tweens.add({ targets: ring, scale: 4, alpha: 0, duration: 260, onComplete: () => ring.destroy() });
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const d = this.add.circle(x, y, 6, i % 2 ? 0xffffff : color).setDepth(80);
+      this.tweens.add({ targets: d, x: x + Math.cos(a) * 70, y: y + Math.sin(a) * 70, alpha: 0, duration: 280, onComplete: () => d.destroy() });
+    }
   }
 
   // ============================================================

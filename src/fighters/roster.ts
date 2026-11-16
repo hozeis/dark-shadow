@@ -1,4 +1,4 @@
-import type { FighterDef, Move } from './types';
+import type { FighterDef, Move, Special, SpecialInput } from './types';
 
 // ============================================================
 //  THE FIGHTERS
@@ -16,28 +16,62 @@ const KICK: Move = {
   reach: 80, height: 80, knockback: 380, hitstun: 320,
 };
 
+// The four special moves. Each fighter gets them with their own names (and can tweak the numbers).
+//   SPECIAL alone       -> wave     (energy blast)
+//   forward + SPECIAL   -> dash     (rush forward)
+//   up + SPECIAL        -> rising   (launching uppercut)
+//   down + SPECIAL      -> bind     (shadow chains pull the enemy in)
+function specials(
+  names: Record<SpecialInput, string>,
+  tweak: Partial<Record<SpecialInput, Partial<Special>>> = {},
+): Record<SpecialInput, Special> {
+  const base: Record<SpecialInput, Special> = {
+    neutral: {
+      name: names.neutral, kind: 'wave', cooldown: 1400, damage: 9, startup: 220, active: 60, recovery: 260,
+      reach: 60, height: 115, knockback: 620, hitstun: 400,
+    },
+    forward: {
+      name: names.forward, kind: 'dash', cooldown: 900, damage: 10, startup: 90, active: 260, recovery: 220,
+      reach: 40, height: 120, knockback: 420, hitstun: 380,
+    },
+    up: {
+      name: names.up, kind: 'rising', cooldown: 900, damage: 12, startup: 100, active: 260, recovery: 300,
+      reach: 45, height: 170, knockback: 120, hitstun: 650, launch: 1050,
+    },
+    down: {
+      name: names.down, kind: 'bind', cooldown: 3000, damage: 7, startup: 280, active: 220, recovery: 380,
+      reach: 420, height: 120, knockback: -380, hitstun: 1100, // negative knockback = pulls the enemy in
+    },
+  };
+  for (const k of Object.keys(tweak) as SpecialInput[]) base[k] = { ...base[k], ...tweak[k] };
+  return base;
+}
+
 export const ROSTER: FighterDef[] = [
   {
-    // From the drawing: the guy with the R cap and the masked giant behind him
+    // From the drawing (and the character sheet): R with his cap and the masked giant behind him
     id: 'r',
     name: 'R',
-    shadowName: 'Masked Giant',
+    shadowName: 'Shadow Spirit',
     look: {
-      skin: 0xc68863, shirt: 0xe9e9ee, pants: 0xbcbdc6, shoes: 0x3a3a48,
-      head: 'cap', accent: 0xf4f4f4, letter: 'R', belt: 0x8a8a96,
+      skin: 0xc68863, shirt: 0x55555c, pants: 0x3e3e44, shoes: 0x1d1d22,
+      head: 'cap', accent: 0x1f1f24, letter: 'R', belt: 0x1a1a1e,
       art: 'r', // his drawing!
+      sheetArt: 'r-sheet', // the character sheet
     },
     shadowLook: {
-      skin: 0x9d8fd6, shirt: 0xa99be0, pants: 0xf2c230, shoes: 0x8f82c8,
-      head: 'mask', accent: 0x5b4b9e, stripe: 0xf2c230, pads: 0xf2c230, belt: 0xe08a2e,
+      skin: 0x4c4a52, shirt: 0x4c4a52, pants: 0xf2c230, shoes: 0x6d6d76,
+      head: 'mask', accent: 0x8c8c96, stripe: 0xf2c230, pads: 0xf2c230, belt: 0xf2c230,
       art: 'r-shadow',
+      sheetArt: 'r-sheet-shadow',
     },
-    shadowGlow: 0x9b7bff,
+    shadowGlow: 0xffc928,
     speed: 300,
     jump: 1000,
     punch: { ...PUNCH },
     kick: { ...KICK },
-    ultimate: { name: 'Earth Breaker', kind: 'quake', damage: 30 },
+    specials: specials({ neutral: 'Energy Wave', forward: 'Shadow Dash', up: 'Rising Breaker', down: 'Spirit Bind' }),
+    ultimate: { name: 'Shadow Overdrive', kind: 'quake', damage: 30 },
   },
   {
     id: 'blaze',
@@ -56,6 +90,7 @@ export const ROSTER: FighterDef[] = [
     jump: 1040,
     punch: { ...PUNCH, damage: 5, startup: 50 },
     kick: { ...KICK, damage: 8 },
+    specials: specials({ neutral: 'Fireball', forward: 'Flame Dash', up: 'Fox Flip', down: 'Fire Leash' }, { forward: { cooldown: 700 } }),
     ultimate: { name: 'Fox Toss', kind: 'throw', damage: 28 },
   },
   {
@@ -75,6 +110,7 @@ export const ROSTER: FighterDef[] = [
     jump: 940,
     punch: { ...PUNCH, damage: 8, startup: 80 },
     kick: { ...KICK, damage: 11, startup: 130 },
+    specials: specials({ neutral: 'Boulder Shot', forward: 'Bear Charge', up: 'Rock Uppercut', down: 'Root Grab' }, { up: { damage: 14 } }),
     ultimate: { name: 'Bear Quake', kind: 'quake', damage: 34 },
   },
   {
@@ -94,6 +130,7 @@ export const ROSTER: FighterDef[] = [
     jump: 1020,
     punch: { ...PUNCH },
     kick: { ...KICK, reach: 90 },
+    specials: specials({ neutral: 'Venom Spit', forward: 'Snake Strike', up: 'Cobra Rise', down: 'Tail Whip' }, { down: { reach: 460 } }),
     ultimate: { name: 'Venom Fling', kind: 'throw', damage: 30 },
   },
 ];

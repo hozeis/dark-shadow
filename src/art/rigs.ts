@@ -9,6 +9,7 @@ export interface RigSlot {
 
 export interface Rig {
   displayScale: number;
+  faceCamera?: boolean; // false = 3/4 or side view: the head turns with the body
   hip: [number, number];
   images: { key: string; file: string }[];
   slots: Record<'legB' | 'legF' | 'torso' | 'head' | 'armB' | 'armF', RigSlot>;

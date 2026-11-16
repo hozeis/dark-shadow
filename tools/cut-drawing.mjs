@@ -3,6 +3,7 @@
 //   npm run art
 //
 // 1. Cleans the photo so it looks scanned (flat white paper, darker pencil, brighter colors)
+//    (or, for digital art on a dark background like a character sheet, just finds the figure)
 // 2. Finds each figure's silhouette (everything inside the pencil outline)
 // 3. Cuts the body parts listed in art/characters.mjs and saves them as PNGs
 // 4. Writes src/art/rigs.json so the game knows where each joint is
@@ -59,6 +60,34 @@ async function cleanPhoto(file) {
   return out;
 }
 
+/** Digital art on a near-black background (a character sheet): no cleaning needed. */
+async function loadSheet(file, mirror) {
+  const key = `${file}|${mirror}`;
+  if (cleanCache.has(key)) return cleanCache.get(key);
+  let img = sharp(file).removeAlpha();
+  if (mirror) img = img.flop(); // so the figure faces right, like every fighter
+  const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
+  const W = info.width, H = info.height;
+  const ink = new Uint8Array(W * H);
+  for (let i = 0, p = 0; p < W * H; p++, i += 3) {
+    const lum = (data[i] + data[i + 1] + data[i + 2]) / 3;
+    const sat = Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]);
+    ink[p] = lum > 28 || sat > 40 ? 1 : 0;
+  }
+  const out = { rgb: data, ink, W, H };
+  cleanCache.set(key, out);
+  return out;
+}
+
+/** Mirror every coordinate of a character (when its picture is flipped). */
+function mirrorCoords(ch, W) {
+  const m = (v) => (Array.isArray(v) && typeof v[0] === 'number' && v.length === 2 ? [W - 1 - v[0], v[1]] : Array.isArray(v) ? v.map(m) : v);
+  const out = { ...ch, ground: m(ch.ground), hip: m(ch.hip), outline: m(ch.outline), images: {}, slots: {} };
+  for (const [k, img] of Object.entries(ch.images)) out.images[k] = { ...img, poly: m(img.poly), pivot: m(img.pivot), ...(img.mirrorX !== undefined ? { mirrorX: W - 1 - img.mirrorX } : {}) };
+  for (const [k, sl] of Object.entries(ch.slots)) out.slots[k] = { ...sl, joint: m(sl.joint) };
+  return out;
+}
+
 function inPoly(x, y, poly) {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -74,12 +103,11 @@ function bounds(poly, pad = 0) {
 }
 
 /** Everything inside the figure's pencil outline = 1, outside paper = 0 (full-photo mask). */
-function silhouette(photo, outline) {
+function silhouette(photo, outline, R = 9) {
   const { ink, W, H } = photo;
   const b = bounds(outline, 3);
   const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1;
   // Close gaps in the pencil lines: thicken every line by R pixels (square, done in two passes)
-  const R = 9;
   const rowPass = new Uint8Array(bw * bh);
   for (let y = 0; y < bh; y++) {
     const gy = y + b.y0;
@@ -137,7 +165,7 @@ function dilate(m, w, h, r) {
 
 const OUTLINE = [27, 16, 48]; // dark purple sticker outline around every part
 
-async function cutImage(photo, mask, img, file, exportScale, paper) {
+async function cutImage(photo, mask, img, file, exportScale, paper, outlineColor = OUTLINE) {
   const { rgb, W, H } = photo;
   const outlineR = Math.max(2, Math.round(1.6 / exportScale)); // ~1.6px thick in the final image
   const thickenR = Math.max(0, Math.round(0.5 / exportScale) - 1); // keep pencil lines visible when shrunk
@@ -179,7 +207,7 @@ async function cutImage(photo, mask, img, file, exportScale, paper) {
   const grown = dilate(solidMask, bw, bh, outlineR);
   for (let p = 0; p < bw * bh; p++) {
     if (grown[p] && !solidMask[p]) {
-      rgba[p * 4] = OUTLINE[0]; rgba[p * 4 + 1] = OUTLINE[1]; rgba[p * 4 + 2] = OUTLINE[2]; rgba[p * 4 + 3] = 255;
+      rgba[p * 4] = outlineColor[0]; rgba[p * 4 + 1] = outlineColor[1]; rgba[p * 4 + 2] = outlineColor[2]; rgba[p * 4 + 3] = 255;
     }
   }
   // soften the cut edges a little
@@ -203,9 +231,12 @@ async function cutImage(photo, mask, img, file, exportScale, paper) {
 }
 
 const rigs = {};
-for (const ch of CHARACTERS) {
-  const photo = await cleanPhoto(ch.photo);
-  const mask = silhouette(photo, ch.outline);
+for (const def of CHARACTERS) {
+  const sheet = def.source === 'sheet';
+  const photo = sheet ? await loadSheet(def.photo, !!def.mirror) : await cleanPhoto(def.photo);
+  const ch = def.mirror ? mirrorCoords(def, photo.W) : def;
+  const mask = silhouette(photo, ch.outline, sheet ? 3 : 9);
+  const GS = ch.gameScale ?? GAME_SCALE;
   const dir = path.join(OUT_IMG, ch.id);
   fs.mkdirSync(dir, { recursive: true });
 
@@ -213,11 +244,11 @@ for (const ch of CHARACTERS) {
   const images = {};
   for (const [name, img] of Object.entries(ch.images)) {
     const file = path.join(dir, `${name}.png`);
-    const { origin } = await cutImage(photo, mask, img, file, exportScale, img.paper ?? ch.paper);
+    const { origin } = await cutImage(photo, mask, img, file, exportScale, img.paper ?? ch.paper, sheet ? [8, 8, 12] : OUTLINE);
     images[name] = { key: `${ch.id}-${name}`, file: `art/${ch.id}/${name}.png`, origin: origin.map((v) => +v.toFixed(4)) };
   }
 
-  const g = (p, rel) => [+((p[0] - rel[0]) * GAME_SCALE).toFixed(2), +((p[1] - rel[1]) * GAME_SCALE).toFixed(2)];
+  const g = (p, rel) => [+((p[0] - rel[0]) * GS).toFixed(2), +((p[1] - rel[1]) * GS).toFixed(2)];
   const slots = {};
   for (const [slot, s] of Object.entries(ch.slots)) {
     const onUpper = slot === 'torso' || slot === 'head' || slot.startsWith('arm');
@@ -225,7 +256,8 @@ for (const ch of CHARACTERS) {
     slots[slot].origin = images[s.image].origin;
   }
   rigs[ch.id] = {
-    displayScale: +(GAME_SCALE / exportScale).toFixed(4),
+    displayScale: +(GS / exportScale).toFixed(4),
+    ...(ch.faceCamera === false ? { faceCamera: false } : {}),
     hip: g(ch.hip, ch.ground),
     images: Object.values(images).map(({ key, file }) => ({ key, file })),
     slots,

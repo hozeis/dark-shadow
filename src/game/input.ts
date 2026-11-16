@@ -8,11 +8,12 @@ export interface Input {
   down: boolean;
   punch: boolean; // true only on the frame the button is pressed
   kick: boolean;
+  special: boolean;
   ult: boolean;
 }
 
 export const NO_INPUT: Input = {
-  left: false, right: false, up: false, down: false, punch: false, kick: false, ult: false,
+  left: false, right: false, up: false, down: false, punch: false, kick: false, special: false, ult: false,
 };
 
 export type KeySet = Record<keyof Input, Phaser.Input.Keyboard.Key>;
@@ -30,6 +31,7 @@ export function readKeys(k: KeySet): Input {
     down: k.down.isDown,
     punch: jd(k.punch),
     kick: jd(k.kick),
+    special: jd(k.special),
     ult: jd(k.ult),
   };
 }
@@ -45,13 +47,14 @@ export function mergeInputs(...inputs: Input[]): Input {
  * Inputs sent over the network. Button presses are counters, so a press is never
  * lost even if two network packets arrive in the same frame.
  */
-export interface NetInput { l: 0 | 1; r: 0 | 1; u: 0 | 1; d: 0 | 1; pc: number; kc: number; uc: number }
+export interface NetInput { l: 0 | 1; r: 0 | 1; u: 0 | 1; d: 0 | 1; pc: number; kc: number; sc: number; uc: number }
 
 export class NetInputEncoder {
-  private counts = { pc: 0, kc: 0, uc: 0 };
+  private counts = { pc: 0, kc: 0, sc: 0, uc: 0 };
   encode(i: Input): NetInput {
     if (i.punch) this.counts.pc++;
     if (i.kick) this.counts.kc++;
+    if (i.special) this.counts.sc++;
     if (i.ult) this.counts.uc++;
     return { l: i.left ? 1 : 0, r: i.right ? 1 : 0, u: i.up ? 1 : 0, d: i.down ? 1 : 0, ...this.counts };
   }
@@ -59,9 +62,9 @@ export class NetInputEncoder {
 
 export class NetInputDecoder {
   private latest: NetInput | null = null;
-  private seen = { pc: 0, kc: 0, uc: 0 };
+  private seen = { pc: 0, kc: 0, sc: 0, uc: 0 };
   push(n: NetInput) {
-    if (!this.latest) this.seen = { pc: n.pc, kc: n.kc, uc: n.uc };
+    if (!this.latest) this.seen = { pc: n.pc, kc: n.kc, sc: n.sc, uc: n.uc };
     this.latest = n;
   }
   read(): Input {
@@ -69,9 +72,9 @@ export class NetInputDecoder {
     if (!n) return { ...NO_INPUT };
     const out: Input = {
       left: !!n.l, right: !!n.r, up: !!n.u, down: !!n.d,
-      punch: n.pc !== this.seen.pc, kick: n.kc !== this.seen.kc, ult: n.uc !== this.seen.uc,
+      punch: n.pc !== this.seen.pc, kick: n.kc !== this.seen.kc, special: n.sc !== this.seen.sc, ult: n.uc !== this.seen.uc,
     };
-    this.seen = { pc: n.pc, kc: n.kc, uc: n.uc };
+    this.seen = { pc: n.pc, kc: n.kc, sc: n.sc, uc: n.uc };
     return out;
   }
 }

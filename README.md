@@ -17,10 +17,21 @@ Open http://localhost:5173
 
 ## Controls
 
-| | Move / Jump / Block | Punch | Kick | Shadow Ultimate |
-|---|---|---|---|---|
-| Player 1 | W A S D (S = block) | F | G | H |
-| Player 2 | Arrow keys (↓ = block) | J | K | L |
+| | Move / Jump / Block | Punch | Kick | Special | Shadow Ultimate |
+|---|---|---|---|---|---|
+| Player 1 | W A S D (S = block) | F | G | R | H |
+| Player 2 | Arrow keys (↓ = block) | J | K | U | L |
+
+**Special moves:** press Special alone or with a direction. R's moves (from his character sheet):
+
+| Press | Move | What it does |
+|---|---|---|
+| Special | Energy Wave | Shoots an energy blast that pushes the enemy back |
+| Forward + Special | Shadow Dash | Rushes forward and hits anyone in the way |
+| Up + Special | Rising Breaker | Jumping uppercut that launches the enemy |
+| Down + Special | Spirit Bind | The shadow's chains grab the enemy and pull them in |
+
+Every fighter has the same four kinds of moves with their own names (see `specials(...)` in `src/fighters/roster.ts`).
 
 Fill the shadow meter by hitting (and getting hit). When it says **SHADOW READY!**, press the ultimate key.
 
@@ -28,7 +39,7 @@ Fill the shadow meter by hitting (and getting hit). When it says **SHADOW READY!
 
 1. Open the game's web address in **Safari**.
 2. Tap **Share → Add to Home Screen**. It gets its own icon and runs full screen.
-3. Hold the phone sideways. Left thumb: joystick (appears wherever you touch). Right thumb: PUNCH, KICK, SHADOW.
+3. Hold the phone sideways. Left thumb: joystick (appears wherever you touch). Right thumb: PUNCH, KICK, SPECIAL, SHADOW.
 
 To test touch controls on a computer, add `?touch=1` to the address.
 
@@ -62,7 +73,13 @@ The two devices connect directly (WebRTC via the free PeerJS service). The playe
 3. Run `npm run art`. It cleans the photo, cuts the parts into `public/art/` and writes `src/art/rigs.json`.
 4. In `src/fighters/roster.ts`, add `art: '<id>'` to the fighter's `look` (or `shadowLook`).
 
-Press **T** on the title screen to switch between the hand-drawn style and the original shape style.
+### From a character sheet
+
+Digital art on a dark background works too (see `r-sheet` in `art/characters.mjs`): set `source: 'sheet'`, `mirror: true` if the figure faces left, and `faceCamera: false` for a 3/4 or side view. Then use `sheetArt: '<id>'` in the fighter's look.
+
+### Art styles
+
+Press **T** on the title screen to cycle: **SHEET** (character-sheet art), **HAND-DRAWN** (the original drawing) and **SHAPES** (the original shape style).
 The shape-only version is also saved in git as the tag `shape-style-v1`.
 
 ## Publish an update

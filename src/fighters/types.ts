@@ -15,6 +15,7 @@ export interface Look {
   pads?: number; // shoulder pads color
   stripe?: number; // mask stripe color
   art?: string; // id of a hand-drawn rig in src/art/rigs.json (made by `npm run art`)
+  sheetArt?: string; // id of a rig cut from a character sheet (used by the "SHEET" art style)
 }
 
 export interface Move {
@@ -27,6 +28,22 @@ export interface Move {
   height: number; // how high off the floor it hits
   knockback: number; // how hard it pushes the enemy
   hitstun: number; // ms the enemy is stunned
+  launch?: number; // throws the enemy up into the air this hard
+}
+
+/**
+ * Special moves: press SPECIAL alone, or with a direction.
+ *  dash   - rush forward, hitting anyone in the way
+ *  wave   - shoot an energy blast across the screen
+ *  rising - jumping uppercut that launches the enemy
+ *  bind   - the shadow throws chains that grab the enemy and pull them in
+ */
+export type SpecialKind = 'dash' | 'wave' | 'rising' | 'bind';
+export type SpecialInput = 'neutral' | 'forward' | 'up' | 'down';
+
+export interface Special extends Move {
+  kind: SpecialKind;
+  cooldown: number; // ms before you can use it again
 }
 
 export interface Ultimate {
@@ -51,5 +68,6 @@ export interface FighterDef {
   jump: number;
   punch: Move;
   kick: Move;
+  specials: Record<SpecialInput, Special>;
   ultimate: Ultimate;
 }

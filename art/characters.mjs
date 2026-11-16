@@ -5,6 +5,12 @@
 //  paper: [r,g,b] = color for the uncolored paper areas (on a character or a single part)
 //  solid: true  = keep everything inside the outline (for faint pencil lines
 //                 where the automatic paper removal leaks inside)
+//
+//  Digital character sheets (dark background) use:
+//    source: 'sheet'   no paper cleaning, the figure is found against the dark background
+//    mirror: true      flip the picture so the figure faces right (coordinates stay as on the original)
+//    gameScale         sheet pixels -> game pixels for this character
+//    faceCamera: false the head turns with the body (3/4 or side views)
 // ============================================================
 
 export const GAME_SCALE = 0.2278; // photo pixels -> game pixels (R is ~210px tall in game)
@@ -56,6 +62,63 @@ export const CHARACTERS = [
       head: { image: 'head', joint: [690, 635] },
       armB: { image: 'arm', joint: [585, 695] },
       armF: { image: 'arm', joint: [795, 695] },
+    },
+  },
+  // ---------- From the character sheet (art/drawings/r-character-sheet.webp), 3/4 view ----------
+  {
+    id: 'r-sheet',
+    source: 'sheet',
+    photo: 'art/drawings/r-character-sheet.webp',
+    mirror: true,
+    faceCamera: false,
+    gameScale: 0.83,
+    exportScale: 1,
+    ground: [678, 291],
+    hip: [675, 150],
+    outline: [[628, 32], [728, 32], [728, 296], [628, 296]],
+    images: {
+      head: { poly: [[644, 52], [654, 38], [681, 36], [690, 47], [692, 58], [688, 69], [681, 79], [661, 81], [654, 73], [649, 63], [645, 59]], pivot: [670, 79] },
+      torso: { poly: [[652, 76], [690, 76], [705, 85], [709, 100], [702, 140], [704, 153], [647, 153], [650, 120], [646, 96], [650, 85]], pivot: [675, 150] },
+      armNear: { poly: [[690, 82], [709, 84], [718, 100], [718, 130], [720, 150], [716, 158], [717, 178], [695, 179], [692, 160], [689, 130], [686, 100]], pivot: [702, 92] },
+      armFar: { poly: [[639, 88], [656, 86], [658, 110], [654, 150], [657, 160], [652, 179], [632, 177], [634, 150], [635, 110]], pivot: [648, 93] },
+      legFar: { poly: [[657, 147], [683, 147], [685, 200], [683, 262], [675, 262], [674, 294], [631, 294], [639, 262], [641, 200], [642, 182], [658, 181]], pivot: [660, 155] },
+      legNear: { poly: [[667, 147], [691, 147], [691, 181], [716, 183], [717, 200], [723, 250], [720, 262], [722, 294], [692, 294], [691, 262], [680, 255], [677, 200]], pivot: [690, 155] },
+    },
+    slots: {
+      legB: { image: 'legFar', joint: [660, 155] },
+      legF: { image: 'legNear', joint: [690, 155] },
+      torso: { image: 'torso', joint: [675, 150] },
+      head: { image: 'head', joint: [670, 79] },
+      armB: { image: 'armFar', joint: [648, 93] },
+      armF: { image: 'armNear', joint: [702, 92] },
+    },
+  },
+  {
+    id: 'r-sheet-shadow',
+    source: 'sheet',
+    photo: 'art/drawings/r-character-sheet.webp',
+    mirror: true,
+    faceCamera: false,
+    gameScale: 0.83,
+    exportScale: 2, // bigger PNGs because the shadow grows into a giant
+    ground: [1210, 290],
+    hip: [1210, 150],
+    outline: [[1160, 32], [1272, 32], [1272, 296], [1160, 296]],
+    images: {
+      head: { poly: [[1191, 52], [1196, 42], [1210, 38], [1221, 44], [1225, 55], [1224, 66], [1216, 73], [1206, 80], [1195, 78], [1191, 68]], pivot: [1208, 80] },
+      torso: { poly: [[1195, 76], [1218, 74], [1230, 81], [1239, 100], [1236, 125], [1229, 140], [1231, 153], [1189, 153], [1188, 130], [1183, 105], [1185, 91]], pivot: [1210, 150] },
+      armNear: { poly: [[1221, 78], [1241, 76], [1256, 87], [1258, 105], [1262, 130], [1260, 160], [1257, 194], [1230, 194], [1233, 160], [1237, 135], [1231, 110], [1224, 95]], pivot: [1240, 92] },
+      armFar: { poly: [[1181, 86], [1199, 90], [1195, 120], [1191, 150], [1189, 165], [1188, 192], [1166, 192], [1170, 165], [1177, 130], [1179, 105]], pivot: [1188, 98] },
+      legFar: { poly: [[1190, 147], [1221, 147], [1223, 200], [1233, 255], [1217, 262], [1215, 293], [1166, 293], [1179, 262], [1181, 200], [1190, 195]], pivot: [1200, 155] },
+      legNear: { poly: [[1204, 147], [1230, 147], [1230, 196], [1241, 200], [1253, 250], [1247, 262], [1251, 293], [1215, 293], [1227, 262], [1229, 250], [1222, 215], [1212, 175]], pivot: [1222, 155] },
+    },
+    slots: {
+      legB: { image: 'legFar', joint: [1200, 155] },
+      legF: { image: 'legNear', joint: [1222, 155] },
+      torso: { image: 'torso', joint: [1210, 150] },
+      head: { image: 'head', joint: [1208, 80] },
+      armB: { image: 'armFar', joint: [1188, 98] },
+      armF: { image: 'armNear', joint: [1240, 92] },
     },
   },
 ];

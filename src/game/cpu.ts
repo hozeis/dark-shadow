@@ -7,7 +7,7 @@ export class CpuBrain {
   private hold: Input = { ...NO_INPUT };
 
   think(me: Fighter, opp: Fighter, time: number): Input {
-    if (time < this.next) return { ...this.hold, punch: false, kick: false, ult: false };
+    if (time < this.next) return { ...this.hold, punch: false, kick: false, special: false, ult: false };
     this.next = time + 120 + Math.random() * 180;
 
     const d = Math.abs(opp.x - me.x);
@@ -17,8 +17,20 @@ export class CpuBrain {
     const h: Input = { ...NO_INPUT };
     const out: Input = { ...NO_INPUT };
 
-    if (me.meter >= 100 && d < 500 && Math.random() < 0.3) {
+    const r0 = Math.random();
+    if (me.meter >= 100 && d < 500 && r0 < 0.3) {
       out.ult = true;
+    } else if (d > 380 && r0 < 0.12) {
+      out.special = true; // energy wave from far away
+    } else if (d > 200 && d < 380 && r0 < 0.1) {
+      out.special = true; // shadow dash
+      h[toward] = true;
+    } else if (d < 330 && r0 < 0.06) {
+      out.special = true; // shadow chains
+      h.down = true;
+    } else if (d < 120 && r0 < 0.1) {
+      out.special = true; // rising uppercut
+      h.up = true;
     } else if (oppAttacking && d < 200 && Math.random() < 0.45) {
       h.down = true;
     } else if (d > 170) {
@@ -33,6 +45,8 @@ export class CpuBrain {
     }
 
     this.hold = h;
-    return { ...h, punch: out.punch, kick: out.kick, ult: out.ult };
+    const now = { ...h, punch: out.punch, kick: out.kick, special: out.special, ult: out.ult };
+    if (out.special) this.hold = { ...NO_INPUT }; // don't keep walking/jumping after a special
+    return now;
   }
 }

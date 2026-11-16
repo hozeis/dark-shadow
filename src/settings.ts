@@ -1,23 +1,26 @@
 // Player settings that are remembered between visits.
 
-export type ArtStyle = 'drawn' | 'shapes';
+/** sheet = character-sheet art, drawn = the hand drawings, shapes = the original shape style */
+export type ArtStyle = 'sheet' | 'drawn' | 'shapes';
+const STYLES: ArtStyle[] = ['sheet', 'drawn', 'shapes'];
+export const ART_STYLE_NAMES: Record<ArtStyle, string> = { sheet: 'SHEET', drawn: 'HAND-DRAWN', shapes: 'SHAPES' };
 
 function load(): ArtStyle {
   try {
-    return localStorage.getItem('artStyle') === 'shapes' ? 'shapes' : 'drawn';
+    const s = localStorage.getItem('artStyle2') as ArtStyle | null;
+    return s && STYLES.includes(s) ? s : 'sheet';
   } catch {
-    return 'drawn';
+    return 'sheet';
   }
 }
 
 export const settings = {
-  /** 'drawn' = use the hand drawings when a fighter has them, 'shapes' = the original shape style */
   artStyle: load(),
 
   toggleArtStyle() {
-    this.artStyle = this.artStyle === 'drawn' ? 'shapes' : 'drawn';
+    this.artStyle = STYLES[(STYLES.indexOf(this.artStyle) + 1) % STYLES.length];
     try {
-      localStorage.setItem('artStyle', this.artStyle);
+      localStorage.setItem('artStyle2', this.artStyle);
     } catch {
       /* private mode: just don't remember */
     }

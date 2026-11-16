@@ -47,6 +47,7 @@ export class Puppet {
   private shapes: { s: Shape; color: number }[] = [];
   private images: { img: Phaser.GameObjects.Image; tint: number }[] = [];
   private head?: Phaser.GameObjects.Container;
+  private headFacesCamera = true;
   private letter?: Phaser.GameObjects.Text;
   private flashTimer?: Phaser.Time.TimerEvent;
 
@@ -62,8 +63,10 @@ export class Puppet {
     this.rig = scene.add.container(0, 0);
     this.root.add(this.rig);
 
-    const art = look.art ? RIGS[look.art] : undefined;
-    this.drawn = !!art && settings.artStyle === 'drawn' && art.images.every((i) => scene.textures.exists(i.key));
+    const style = settings.artStyle;
+    const artId = style === 'sheet' ? look.sheetArt ?? look.art : style === 'drawn' ? look.art : undefined;
+    const art = artId ? RIGS[artId] : undefined;
+    this.drawn = !!art && art.images.every((i) => scene.textures.exists(i.key));
     if (this.drawn) this.buildDrawn(art!);
     else this.buildShapes(look);
   }
@@ -81,6 +84,7 @@ export class Puppet {
       return c;
     };
     this.hipY = rig.hip[1];
+    this.headFacesCamera = rig.faceCamera !== false;
     this.legB = piece('legB', BACK);
     this.legF = piece('legF');
     this.upper = this.scene.add.container(rig.hip[0], rig.hip[1]);
@@ -135,7 +139,10 @@ export class Puppet {
       add(this.rect(0, y - 16, 44, 22, look.accent), this.rect(18, y - 6, 26, 6, shade(look.accent, 0.8)));
       if (look.letter) {
         this.letter = this.scene.add
-          .text(-1, y - 16, look.letter, { fontFamily: FONT, fontSize: '20px', color: '#2a2a33' })
+          .text(-1, y - 16, look.letter, {
+            fontFamily: FONT, fontSize: '20px',
+            color: Phaser.Display.Color.IntegerToColor(look.accent).v < 0.5 ? '#f4f4f4' : '#2a2a33',
+          })
           .setOrigin(0.5);
         add(this.letter);
       }
@@ -188,7 +195,7 @@ export class Puppet {
   /** Keep the cap letter readable when the body is mirrored. */
   setFacing(facing: number) {
     this.letter?.setScale(facing, 1);
-    this.head?.setScale(facing, 1); // the drawn face looks at you, so never mirror it
+    if (this.headFacesCamera) this.head?.setScale(facing, 1); // a face drawn looking at you is never mirrored
   }
 
   flash(color = 0xffffff, ms = 80) {

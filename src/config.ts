@@ -18,5 +18,6 @@ export const SHADOW_ALPHA = 0.42; // how see-through (0 = invisible, 1 = solid)
 export const FONT = 'Bangers, Impact, sans-serif';
 
 // Keyboard controls
-export const P1_KEYS = { left: 'A', right: 'D', up: 'W', down: 'S', punch: 'F', kick: 'G', ult: 'H' };
-export const P2_KEYS = { left: 'LEFT', right: 'RIGHT', up: 'UP', down: 'DOWN', punch: 'J', kick: 'K', ult: 'L' };
+// special = the key above punch (press it alone, or with a direction)
+export const P1_KEYS = { left: 'A', right: 'D', up: 'W', down: 'S', punch: 'F', kick: 'G', special: 'R', ult: 'H' };
+export const P2_KEYS = { left: 'LEFT', right: 'RIGHT', up: 'UP', down: 'DOWN', punch: 'J', kick: 'K', special: 'U', ult: 'L' };

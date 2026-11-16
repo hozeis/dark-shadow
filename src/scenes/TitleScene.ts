@@ -4,7 +4,7 @@ import { Puppet, BASE_POSE } from '../game/Puppet';
 import { ROSTER } from '../fighters/roster';
 import { FONT, GROUND_Y } from '../config';
 import { RIGS } from '../art/rigs';
-import { settings } from '../settings';
+import { settings, ART_STYLE_NAMES } from '../settings';
 
 export class TitleScene extends Phaser.Scene {
   private hero!: Puppet;
@@ -65,17 +65,18 @@ export class TitleScene extends Phaser.Scene {
     }
 
     const controls = [
-      'P1:  W A S D  move/jump/block   ·   F  punch   ·   G  kick   ·   H  shadow ultimate',
-      'P2:  ARROWS  move/jump/block   ·   J  punch   ·   K  kick   ·   L  shadow ultimate',
+      'P1:  W A S D  move/jump/block  ·  F  punch  ·  G  kick  ·  R  special  ·  H  shadow ultimate',
+      'P2:  ARROWS  move/jump/block  ·  J  punch  ·  K  kick  ·  U  special  ·  L  shadow ultimate',
+      'SPECIALS:  special alone, or with  forward / up / down  for 4 different moves',
     ];
-    this.add.text(640, 668, controls.join('\n'), {
+    this.add.text(640, 655, controls.join('\n'), {
       fontFamily: FONT, fontSize: '22px', color: '#ffffff', stroke: '#000', strokeThickness: 4, align: 'center',
     }).setOrigin(0.5).setDepth(5);
 
     const styleText = this.add.text(1260, 20, '', {
       fontFamily: FONT, fontSize: '24px', color: '#ffffff', stroke: '#000', strokeThickness: 5,
     }).setOrigin(1, 0).setDepth(5).setInteractive({ useHandCursor: true });
-    styleText.setText(`ART STYLE:  ${settings.artStyle === 'drawn' ? 'DRAWN' : 'SHAPES'}   [T]`);
+    styleText.setText(`ART STYLE:  ${ART_STYLE_NAMES[settings.artStyle]}   [T]`);
     styleText.on('pointerdown', () => this.toggleStyle());
 
     const kb = this.input.keyboard!;
