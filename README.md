@@ -4,6 +4,8 @@ A 2D fighting game where every fighter has a **shadow spirit** behind them that 
 
 Built with [Phaser 3](https://phaser.io) + TypeScript + Vite.
 
+**Play it:** https://hozeis.github.io/dark-shadow/
+
 ## Run it
 
 ```bash
@@ -62,6 +64,14 @@ The two devices connect directly (WebRTC via the free PeerJS service). The playe
 
 Press **T** on the title screen to switch between the hand-drawn style and the original shape style.
 The shape-only version is also saved in git as the tag `shape-style-v1`.
+
+## Publish an update
+
+```bash
+npm run deploy
+```
+
+Builds the game and pushes it to the `gh-pages` branch. The site updates in about a minute.
 
 ## Publish to itch.io
 
