@@ -22,6 +22,22 @@ Open http://localhost:5173
 
 Fill the shadow meter by hitting (and getting hit). When it says **SHADOW READY!**, press the ultimate key.
 
+## On iPhone
+
+1. Open the game's web address in **Safari**.
+2. Tap **Share → Add to Home Screen**. It gets its own icon and runs full screen.
+3. Hold the phone sideways. Left thumb: joystick (appears wherever you touch). Right thumb: PUNCH, KICK, SHADOW.
+
+To test touch controls on a computer, add `?touch=1` to the address.
+
+## Online multiplayer
+
+Title screen → **PLAY ONLINE**:
+- **Create room** gives you a 4-letter code. Tap **Share invite link** to send it (opening the link joins automatically).
+- **Join room**: type your friend's code.
+
+The two devices connect directly (WebRTC via the free PeerJS service). The player who created the room runs the fight; the other player sees what the host sees. Phones and computers can play each other.
+
 ## Where things live
 
 | File | What it does |
@@ -33,6 +49,19 @@ Fill the shadow meter by hitting (and getting hit). When it says **SHADOW READY!
 | `src/scenes/FightScene.ts` | Rounds, hits, and the **shadow ultimate cinematics** |
 | `src/scenes/HudScene.ts` | Health bars, timer, meters, big text |
 | `src/game/stage.ts` | The arena background |
+| `src/scenes/TouchScene.ts` | On-screen joystick and buttons for phones |
+| `src/scenes/OnlineScene.ts` | Online lobby: create/join rooms |
+| `src/net/NetSession.ts` | Online connection between two devices |
+
+## Adding a new drawing
+
+1. Take a photo of the drawing from straight above, in good light, and put it in `art/drawings/`.
+2. In `art/characters.mjs`, copy one of the characters and set the pixel coordinates (on the photo) of each body part and joint.
+3. Run `npm run art`. It cleans the photo, cuts the parts into `public/art/` and writes `src/art/rigs.json`.
+4. In `src/fighters/roster.ts`, add `art: '<id>'` to the fighter's `look` (or `shadowLook`).
+
+Press **T** on the title screen to switch between the hand-drawn style and the original shape style.
+The shape-only version is also saved in git as the tag `shape-style-v1`.
 
 ## Publish to itch.io
 

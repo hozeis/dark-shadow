@@ -13,6 +13,15 @@ export type State =
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
+/** Everything the guest needs to draw a fighter exactly like the host sees it. */
+export interface FighterNet {
+  x: number; y: number; f: 1 | -1; st: State; t: number; hp: number; m: number; w: number;
+  sp: number; po: Partial<Pose> | null; spo: Partial<Pose> | null;
+  sx: number; sy: number; ss: number; sa: number; atk: 'punch' | 'kick' | null; d: number; sd: number;
+}
+
+const r1 = (n: number) => Math.round(n * 10) / 10;
+
 export class Fighter {
   readonly puppet: Puppet;
   readonly shadow: Puppet;
@@ -293,5 +302,27 @@ export class Fighter {
 
   setDepth(d: number) {
     this.puppet.root.setDepth(d);
+  }
+
+  toNet(): FighterNet {
+    return {
+      x: r1(this.x), y: r1(this.y), f: this.facing, st: this.state, t: Math.round(this.t),
+      hp: r1(this.hp), m: r1(this.meter), w: this.wins, sp: r1(this.spin),
+      po: this.poseOverride, spo: this.shadowPoseOverride,
+      sx: r1(this.sx), sy: r1(this.sy), ss: Math.round(this.sScale * 100) / 100, sa: Math.round(this.sAlpha * 100) / 100,
+      atk: this.attack === this.def.punch ? 'punch' : this.attack === this.def.kick ? 'kick' : null,
+      d: this.puppet.root.depth, sd: this.shadow.root.depth,
+    };
+  }
+
+  fromNet(n: FighterNet) {
+    this.x = n.x; this.y = n.y; this.facing = n.f; this.state = n.st; this.t = n.t;
+    this.hp = n.hp; this.meter = n.m; this.wins = n.w; this.spin = n.sp;
+    this.poseOverride = n.po; this.shadowPoseOverride = n.spo;
+    this.sx = n.sx; this.sy = n.sy; this.sScale = n.ss; this.sAlpha = n.sa;
+    this.sFollow = false; // the host already moved the shadow
+    this.attack = n.atk === 'punch' ? this.def.punch : n.atk === 'kick' ? this.def.kick : null;
+    this.puppet.root.setDepth(n.d);
+    this.shadow.root.setDepth(n.sd);
   }
 }

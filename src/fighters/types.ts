@@ -14,6 +14,7 @@ export interface Look {
   letter?: string; // letter printed on the cap
   pads?: number; // shoulder pads color
   stripe?: number; // mask stripe color
+  art?: string; // id of a hand-drawn rig in src/art/rigs.json (made by `npm run art`)
 }
 
 export interface Move {

@@ -1,11 +1,14 @@
 import Phaser from 'phaser';
 import type { Look } from '../fighters/types';
 import { FONT } from '../config';
+import { RIGS, type Rig } from '../art/rigs';
+import { settings } from '../settings';
 
 /**
  * A paper-puppet body made of simple shapes (head, torso, arms, legs).
  * Each limb rotates around its joint, so poses are just angles.
- * Later we can swap the shapes for pieces cut out of the real drawings.
+ * If the look has hand-drawn art (and the art style is "drawn"), the pieces
+ * are cut-outs of the real drawing instead of shapes.
  */
 
 export interface Pose {
@@ -32,14 +35,18 @@ type Shape = Phaser.GameObjects.Shape;
 export class Puppet {
   readonly root: Phaser.GameObjects.Container; // position + facing
   readonly rig: Phaser.GameObjects.Container; // tilt / spin
-  readonly upper: Phaser.GameObjects.Container; // torso, head, arms
-  readonly armF: Phaser.GameObjects.Container;
-  readonly armB: Phaser.GameObjects.Container;
-  readonly legF: Phaser.GameObjects.Container;
-  readonly legB: Phaser.GameObjects.Container;
+  upper!: Phaser.GameObjects.Container; // torso, head, arms
+  armF!: Phaser.GameObjects.Container;
+  armB!: Phaser.GameObjects.Container;
+  legF!: Phaser.GameObjects.Container;
+  legB!: Phaser.GameObjects.Container;
   pose: Pose = { ...BASE_POSE };
+  readonly drawn: boolean;
 
+  private hipY = -80;
   private shapes: { s: Shape; color: number }[] = [];
+  private images: { img: Phaser.GameObjects.Image; tint: number }[] = [];
+  private head?: Phaser.GameObjects.Container;
   private letter?: Phaser.GameObjects.Text;
   private flashTimer?: Phaser.Time.TimerEvent;
 
@@ -55,6 +62,40 @@ export class Puppet {
     this.rig = scene.add.container(0, 0);
     this.root.add(this.rig);
 
+    const art = look.art ? RIGS[look.art] : undefined;
+    this.drawn = !!art && settings.artStyle === 'drawn' && art.images.every((i) => scene.textures.exists(i.key));
+    if (this.drawn) this.buildDrawn(art!);
+    else this.buildShapes(look);
+  }
+
+  /** Build the body from pieces of the hand drawing. */
+  private buildDrawn(rig: Rig) {
+    const BACK = 0xb8b0c4; // back arm/leg slightly darker so the body reads in 3D
+    const piece = (slot: keyof Rig['slots'], tint = 0xffffff) => {
+      const sl = rig.slots[slot];
+      const c = this.scene.add.container(sl.pos[0], sl.pos[1]);
+      const img = this.scene.add.image(0, 0, sl.image).setOrigin(sl.origin[0], sl.origin[1]).setScale(rig.displayScale);
+      if (tint !== 0xffffff) img.setTint(tint);
+      this.images.push({ img, tint });
+      c.add(img);
+      return c;
+    };
+    this.hipY = rig.hip[1];
+    this.legB = piece('legB', BACK);
+    this.legF = piece('legF');
+    this.upper = this.scene.add.container(rig.hip[0], rig.hip[1]);
+    this.armB = piece('armB', BACK);
+    const torso = piece('torso');
+    // torso/head/arm positions are relative to the hip
+    this.head = piece('head');
+    this.armF = piece('armF');
+    this.upper.add([this.armB, torso, this.head, this.armF]);
+    this.rig.add([this.legB, this.legF, this.upper]);
+  }
+
+  /** Build the body out of simple shapes (the original style). */
+  private buildShapes(look: Look) {
+    const scene = this.scene;
     this.legB = this.limb(-9, -80, 22, 80, shade(look.pants, 0.75), 'foot', shade(look.shoes, 0.75));
     this.legF = this.limb(9, -80, 22, 80, look.pants, 'foot', look.shoes);
 
@@ -140,20 +181,26 @@ export class Puppet {
     this.legF.angle = p.legF;
     this.legB.angle = p.legB;
     this.upper.angle = p.lean;
-    this.upper.y = -80 + p.bob;
+    this.upper.y = this.hipY + p.bob;
     this.rig.angle = p.tilt + spin;
   }
 
   /** Keep the cap letter readable when the body is mirrored. */
   setFacing(facing: number) {
     this.letter?.setScale(facing, 1);
+    this.head?.setScale(facing, 1); // the drawn face looks at you, so never mirror it
   }
 
   flash(color = 0xffffff, ms = 80) {
     for (const { s } of this.shapes) s.setFillStyle(color);
+    for (const { img } of this.images) img.setTintFill(color);
     this.flashTimer?.remove();
     this.flashTimer = this.scene.time.delayedCall(ms, () => {
       for (const { s, color: c } of this.shapes) s.setFillStyle(c);
+      for (const { img, tint } of this.images) {
+        img.clearTint();
+        if (tint !== 0xffffff) img.setTint(tint);
+      }
     });
   }
 

@@ -25,10 +25,12 @@ export const ROSTER: FighterDef[] = [
     look: {
       skin: 0xc68863, shirt: 0xe9e9ee, pants: 0xbcbdc6, shoes: 0x3a3a48,
       head: 'cap', accent: 0xf4f4f4, letter: 'R', belt: 0x8a8a96,
+      art: 'r', // his drawing!
     },
     shadowLook: {
       skin: 0x9d8fd6, shirt: 0xa99be0, pants: 0xf2c230, shoes: 0x8f82c8,
       head: 'mask', accent: 0x5b4b9e, stripe: 0xf2c230, pads: 0xf2c230, belt: 0xe08a2e,
+      art: 'r-shadow',
     },
     shadowGlow: 0x9b7bff,
     speed: 300,

@@ -6,12 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "art": "node tools/cut-drawing.mjs",
+    "icons": "node tools/make-icons.mjs",
+    "deploy": "npm run build && cd dist && touch .nojekyll && git init -q -b gh-pages && git add -A && git commit -qm deploy && git push -f https://github.com/hozeis/dark-shadow.git gh-pages && rm -rf .git"
   },
   "dependencies": {
+    "peerjs": "^1.5.4",
     "phaser": "^3.90.0"
   },
   "devDependencies": {
+    "sharp": "^0.33.5",
     "typescript": "^5.9.3",
     "vite": "^6.4.6"
   }

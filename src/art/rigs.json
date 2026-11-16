@@ -1,0 +1,192 @@
+{
+  "r": {
+    "displayScale": 0.7593,
+    "hip": [
+      0,
+      -76.77
+    ],
+    "images": [
+      {
+        "key": "r-head",
+        "file": "art/r/head.png"
+      },
+      {
+        "key": "r-torso",
+        "file": "art/r/torso.png"
+      },
+      {
+        "key": "r-arm",
+        "file": "art/r/arm.png"
+      },
+      {
+        "key": "r-legL",
+        "file": "art/r/legL.png"
+      },
+      {
+        "key": "r-legR",
+        "file": "art/r/legR.png"
+      }
+    ],
+    "slots": {
+      "legB": {
+        "image": "r-legL",
+        "pos": [
+          -10.71,
+          -76.09
+        ],
+        "origin": [
+          0.4828,
+          0.0541
+        ]
+      },
+      "legF": {
+        "image": "r-legR",
+        "pos": [
+          12.07,
+          -76.09
+        ],
+        "origin": [
+          0.4685,
+          0.0541
+        ]
+      },
+      "torso": {
+        "image": "r-torso",
+        "pos": [
+          0,
+          0
+        ],
+        "origin": [
+          0.4633,
+          0.9681
+        ]
+      },
+      "head": {
+        "image": "r-head",
+        "pos": [
+          0,
+          -72.9
+        ],
+        "origin": [
+          0.4944,
+          0.9474
+        ]
+      },
+      "armB": {
+        "image": "r-arm",
+        "pos": [
+          -28.93,
+          -52.39
+        ],
+        "origin": [
+          0.4646,
+          0.1108
+        ]
+      },
+      "armF": {
+        "image": "r-arm",
+        "pos": [
+          31.44,
+          -52.39
+        ],
+        "origin": [
+          0.4646,
+          0.1108
+        ]
+      }
+    }
+  },
+  "r-shadow": {
+    "displayScale": 0.3797,
+    "hip": [
+      0,
+      -89.3
+    ],
+    "images": [
+      {
+        "key": "r-shadow-head",
+        "file": "art/r-shadow/head.png"
+      },
+      {
+        "key": "r-shadow-torso",
+        "file": "art/r-shadow/torso.png"
+      },
+      {
+        "key": "r-shadow-arm",
+        "file": "art/r-shadow/arm.png"
+      },
+      {
+        "key": "r-shadow-leg",
+        "file": "art/r-shadow/leg.png"
+      }
+    ],
+    "slots": {
+      "legB": {
+        "image": "r-shadow-leg",
+        "pos": [
+          -7.97,
+          -88.16
+        ],
+        "origin": [
+          0.4455,
+          0.052
+        ]
+      },
+      "legF": {
+        "image": "r-shadow-leg",
+        "pos": [
+          7.97,
+          -88.16
+        ],
+        "origin": [
+          0.4455,
+          0.052
+        ]
+      },
+      "torso": {
+        "image": "r-shadow-torso",
+        "pos": [
+          0,
+          0
+        ],
+        "origin": [
+          0.4979,
+          0.9721
+        ]
+      },
+      "head": {
+        "image": "r-shadow-head",
+        "pos": [
+          0,
+          -60.37
+        ],
+        "origin": [
+          0.4809,
+          0.9395
+        ]
+      },
+      "armB": {
+        "image": "r-shadow-arm",
+        "pos": [
+          -23.92,
+          -46.7
+        ],
+        "origin": [
+          0.3111,
+          0.1013
+        ]
+      },
+      "armF": {
+        "image": "r-shadow-arm",
+        "pos": [
+          23.92,
+          -46.7
+        ],
+        "origin": [
+          0.3111,
+          0.1013
+        ]
+      }
+    }
+  }
+}

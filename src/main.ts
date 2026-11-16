@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { TitleScene } from './scenes/TitleScene';
 import { FightScene } from './scenes/FightScene';
 import { HudScene } from './scenes/HudScene';
+import { TouchScene } from './scenes/TouchScene';
+import { OnlineScene } from './scenes/OnlineScene';
 import { GAME_W, GAME_H } from './config';
 
 async function boot() {
@@ -19,7 +21,8 @@ async function boot() {
     height: GAME_H,
     backgroundColor: '#05020a',
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-    scene: [TitleScene, FightScene, HudScene],
+    scene: [TitleScene, OnlineScene, FightScene, HudScene, TouchScene],
+    input: { activePointers: 4 },
   });
 
   // Handy for debugging in the browser console (dev only)

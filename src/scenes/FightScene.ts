@@ -1,8 +1,12 @@
 import Phaser from 'phaser';
-import { Fighter } from '../game/Fighter';
+import { Fighter, type FighterNet } from '../game/Fighter';
 import { ROSTER } from '../fighters/roster';
 import { drawStage } from '../game/stage';
-import { makeKeys, readKeys, NO_INPUT, type KeySet } from '../game/input';
+import {
+  makeKeys, readKeys, mergeInputs, NO_INPUT, NetInputDecoder, NetInputEncoder, type KeySet, type Input,
+} from '../game/input';
+import { net, type NetMessage } from '../net/NetSession';
+import { isTouchDevice, type TouchScene } from './TouchScene';
 import { CpuBrain } from '../game/cpu';
 import {
   GAME_W, GAME_H, GROUND_Y, STAGE_LEFT, STAGE_RIGHT, P1_KEYS, P2_KEYS,
@@ -10,13 +14,28 @@ import {
 } from '../config';
 
 type RoundState = 'intro' | 'fight' | 'cinematic' | 'roundEnd' | 'matchEnd';
+/** pvp = 2 players on one device, cpu = vs computer, host/guest = online */
+export type Mode = 'pvp' | 'cpu' | 'host' | 'guest';
+
+/** Visual effects the host tells the guest to play */
+type Fx =
+  | { k: 'sparks'; x: number; y: number; c: number; n: number; b: boolean }
+  | { k: 'dust'; x: number; y: number }
+  | { k: 'spike'; x: number }
+  | { k: 'shake'; d: number; i: number }
+  | { k: 'flash'; p: 1 | 2; c: number; ms: number };
+
+interface Snapshot {
+  t: 's'; rs: RoundState; tl: number; ann: Announcement; ban: Banner;
+  cam: [number, number, number]; ov: number; f: [FighterNet, FighterNet]; fx: Fx[];
+}
 export interface Announcement { id: number; text: string; color: string; hold: boolean }
 export interface Banner { id: number; title: string; sub: string; color: number }
 
 export class FightScene extends Phaser.Scene {
   p1!: Fighter;
   p2!: Fighter;
-  mode: 'pvp' | 'cpu' = 'pvp';
+  mode: Mode = 'pvp';
   round = 1;
   roundState: RoundState = 'intro';
   timeLeft = ROUND_TIME;
@@ -31,13 +50,25 @@ export class FightScene extends Phaser.Scene {
   private escKey!: Phaser.Input.Keyboard.Key;
   private cpu: CpuBrain | null = null;
   private overlay!: Phaser.GameObjects.Rectangle;
+  private touch: TouchScene | null = null;
+  // online
+  private remote = new NetInputDecoder();
+  private encoder = new NetInputEncoder();
+  private fxQueue: Fx[] = [];
+  private snapshot: Snapshot | null = null;
+  private lastSent = 0;
+  private leaving = false;
 
   constructor() {
     super('Fight');
   }
 
-  init(data: { mode?: 'pvp' | 'cpu' }) {
+  init(data: { mode?: Mode }) {
     this.mode = data.mode ?? 'pvp';
+    this.fxQueue = [];
+    this.snapshot = null;
+    this.leaving = false;
+    this.remote = new NetInputDecoder();
     this.round = 1;
     this.roundState = 'intro';
     this.hitstop = 0;
@@ -60,7 +91,72 @@ export class FightScene extends Phaser.Scene {
 
     this.cameras.main.setZoom(1).centerOn(GAME_W / 2, GAME_H / 2);
     this.scene.launch('Hud');
-    this.startRound();
+
+    if (isTouchDevice(this.game)) {
+      this.scene.launch('Touch');
+      this.touch = this.scene.get('Touch') as TouchScene;
+      this.touch.onRematch = () => this.requestRematch();
+      this.touch.onMenu = () => this.quitToMenu();
+    } else {
+      this.touch = null;
+      this.scene.stop('Touch');
+    }
+
+    const session = net.session;
+    if (this.mode === 'host' || this.mode === 'guest') {
+      if (!session) {
+        this.quitToMenu();
+        return;
+      }
+      session.onMessage = (m) => this.onNetMessage(m);
+      session.onClose = () => this.opponentLeft();
+    }
+
+    if (this.mode !== 'guest') this.startRound();
+  }
+
+  /** Which fighter does this device control? (online guest plays P2) */
+  get localFighter() {
+    return this.mode === 'guest' ? this.p2 : this.p1;
+  }
+
+  private touchInput(): Input {
+    return this.touch?.read() ?? { ...NO_INPUT };
+  }
+
+  private onNetMessage(m: NetMessage) {
+    if (this.mode === 'host') {
+      if (m.t === 'in') this.remote.push(m.i);
+      else if (m.t === 'rematch' && this.roundState === 'matchEnd') this.scene.restart({ mode: this.mode });
+    } else if (m.t === 's') {
+      this.snapshot = m as unknown as Snapshot;
+    }
+  }
+
+  private requestRematch() {
+    if (this.roundState !== 'matchEnd') return;
+    if (this.mode === 'guest') net.session?.send({ t: 'rematch' });
+    else this.scene.restart({ mode: this.mode });
+  }
+
+  quitToMenu() {
+    if (this.leaving) return;
+    this.leaving = true;
+    if (net.session) {
+      net.session.onClose = null;
+      net.session.close();
+      net.session = null;
+    }
+    this.scene.stop('Hud');
+    this.scene.stop('Touch');
+    this.scene.start('Title');
+  }
+
+  private opponentLeft() {
+    net.session = null;
+    this.announce('OPPONENT LEFT', '#ff3355', true);
+    this.roundState = 'matchEnd';
+    this.time.delayedCall(2500, () => this.quitToMenu());
   }
 
   private startRound() {
@@ -80,25 +176,39 @@ export class FightScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number) {
+    if (this.leaving) return;
     if (Phaser.Input.Keyboard.JustDown(this.escKey)) {
-      this.scene.stop('Hud');
-      this.scene.start('Title');
+      this.quitToMenu();
       return;
     }
     if (this.roundState === 'matchEnd' && Phaser.Input.Keyboard.JustDown(this.enterKey)) {
-      this.scene.restart({ mode: this.mode });
+      this.requestRematch();
       return;
+    }
+    if (this.touch) {
+      this.touch.ultReady = this.localFighter.meter >= 100;
+      this.touch.showRematch = this.roundState === 'matchEnd' && !!(this.mode !== 'host' && this.mode !== 'guest' || net.session);
     }
 
     const dt = Math.min(delta, 50) / 1000;
+    if (this.mode === 'guest') {
+      this.guestUpdate(time, dt);
+      return;
+    }
+    if (this.mode === 'host') this.sendSnapshot(time);
+
     if (this.hitstop > 0) {
       this.hitstop -= delta; // freeze-frame on hits makes them feel heavy
       return;
     }
 
     const fighting = this.roundState === 'fight';
-    const k1 = readKeys(this.keys1);
-    const k2 = this.cpu ? this.cpu.think(this.p2, this.p1, time) : readKeys(this.keys2);
+    const local = readKeys(this.keys1);
+    const k1 = mergeInputs(local, this.touchInput());
+    let k2: Input;
+    if (this.mode === 'cpu') k2 = this.cpu!.think(this.p2, this.p1, time);
+    else if (this.mode === 'host') k2 = this.remote.read();
+    else k2 = readKeys(this.keys2);
     this.p1.update(dt, fighting ? k1 : NO_INPUT, this.p2);
     this.p2.update(dt, fighting ? k2 : NO_INPUT, this.p1);
     this.separate();
@@ -123,6 +233,74 @@ export class FightScene extends Phaser.Scene {
         this.endRound(false);
       }
     }
+  }
+
+  // ============================================================
+  //  ONLINE
+  // ============================================================
+
+  /** Host: send the whole fight state to the guest (every frame). */
+  private sendSnapshot(time: number) {
+    const s = net.session;
+    if (!s || time - this.lastSent < 15) return;
+    this.lastSent = time;
+    const cam = this.cameras.main;
+    const snap: Snapshot = {
+      t: 's', rs: this.roundState, tl: Math.round(this.timeLeft * 10) / 10,
+      ann: this.announcement, ban: this.banner,
+      cam: [Math.round(cam.zoom * 1000) / 1000, Math.round(cam.scrollX), Math.round(cam.scrollY)],
+      ov: Math.round(this.overlay.alpha * 100) / 100,
+      f: [this.p1.toNet(), this.p2.toNet()],
+      fx: this.fxQueue,
+    };
+    this.fxQueue = [];
+    s.send(snap as unknown as NetMessage);
+  }
+
+  /** Guest: send my buttons, then draw what the host says. */
+  private guestUpdate(time: number, dt: number) {
+    const mine = mergeInputs(readKeys(this.keys1), readKeys(this.keys2), this.touchInput());
+    net.session?.send({ t: 'in', i: this.encoder.encode(mine) });
+
+    const snap = this.snapshot;
+    if (snap) {
+      this.snapshot = null;
+      this.roundState = snap.rs;
+      this.timeLeft = snap.tl;
+      this.announcement = snap.ann;
+      this.banner = snap.ban;
+      this.overlay.setAlpha(snap.ov);
+      this.cameras.main.setZoom(snap.cam[0]).setScroll(snap.cam[1], snap.cam[2]);
+      this.p1.fromNet(snap.f[0]);
+      this.p2.fromNet(snap.f[1]);
+      for (const fx of snap.fx) this.playFx(fx);
+    }
+    this.p1.sync(time, dt);
+    this.p2.sync(time, dt);
+  }
+
+  private record(fx: Fx) {
+    if (this.mode === 'host') this.fxQueue.push(fx);
+  }
+
+  private playFx(fx: Fx) {
+    switch (fx.k) {
+      case 'sparks': this.sparks(fx.x, fx.y, fx.c, fx.n, fx.b); break;
+      case 'dust': this.dust(fx.x, fx.y); break;
+      case 'spike': this.spike(fx.x); break;
+      case 'shake': this.shake(fx.d, fx.i); break;
+      case 'flash': this.flash(fx.p === 1 ? this.p1 : this.p2, fx.c, fx.ms); break;
+    }
+  }
+
+  private shake(duration: number, intensity: number) {
+    this.record({ k: 'shake', d: duration, i: intensity });
+    this.cameras.main.shake(duration, intensity);
+  }
+
+  private flash(f: Fighter, color = 0xffffff, ms = 80) {
+    this.record({ k: 'flash', p: f === this.p1 ? 1 : 2, c: color, ms });
+    f.puppet.flash(color, ms);
   }
 
   /** Stop fighters from walking through each other. */
@@ -159,10 +337,10 @@ export class FightScene extends Phaser.Scene {
       this.hitstop = 40;
     } else {
       a.addMeter(move.damage * 1.2);
-      b.puppet.flash();
+      this.flash(b);
       this.sparks(px, py, 0xffdd44, res === 'ko' ? 18 : 10, res === 'ko');
       this.hitstop = res === 'ko' ? 260 : 70;
-      this.cameras.main.shake(res === 'ko' ? 400 : 100, res === 'ko' ? 0.015 : 0.004);
+      this.shake(res === 'ko' ? 400 : 100, res === 'ko' ? 0.015 : 0.004);
     }
   }
 
@@ -212,7 +390,7 @@ export class FightScene extends Phaser.Scene {
     a.setDepth(72);
     v.setDepth(71);
     a.shadow.root.setDepth(60);
-    a.puppet.flash(a.def.shadowGlow, 220);
+    this.flash(a, a.def.shadowGlow, 220);
 
     this.tweens.add({ targets: this.overlay, alpha: 0.7, duration: 300 });
     this.cameras.main.zoomTo(0.7, 450, 'Sine.easeInOut');
@@ -241,7 +419,7 @@ export class FightScene extends Phaser.Scene {
     });
     this.at(1000, () => {
       a.shadowPoseOverride = { armF: -10, armB: -40, lean: 35, bob: 30, legF: -35, legB: 20 };
-      this.cameras.main.shake(380, 0.02);
+      this.shake(380, 0.02);
       this.dust(a.sx + f * 150, GROUND_Y);
       this.spike(v.x);
       v.poseOverride = { lean: -30, armF: -150, armB: -170, legF: 20, legB: -20 };
@@ -286,8 +464,8 @@ export class FightScene extends Phaser.Scene {
     const hx = v.x, hy = v.y - 100;
     this.sparks(hx, hy, 0xffffff, 18, true);
     this.sparks(hx, hy, a.def.shadowGlow, 14, true);
-    this.cameras.main.shake(320, 0.03);
-    v.puppet.flash(0xffffff, 120);
+    this.shake(320, 0.03);
+    this.flash(v, 0xffffff, 120);
     v.hp = Math.max(0, v.hp - a.def.ultimate.damage);
     v.poseOverride = { lean: -35, armF: -170, armB: -160, legF: -30, legB: 10 };
     this.arc(v, a.facing * dx, height, 650);
@@ -337,12 +515,13 @@ export class FightScene extends Phaser.Scene {
       onComplete: () => {
         fighter.y = GROUND_Y;
         this.dust(fighter.x, GROUND_Y);
-        this.cameras.main.shake(150, 0.008);
+        this.shake(150, 0.008);
       },
     });
   }
 
   sparks(x: number, y: number, color: number, n: number, big = false) {
+    this.record({ k: 'sparks', x: Math.round(x), y: Math.round(y), c: color, n, b: big });
     const ring = this.add.circle(x, y, big ? 20 : 10).setStrokeStyle(big ? 6 : 4, color).setDepth(80);
     this.tweens.add({ targets: ring, scale: big ? 6 : 3, alpha: 0, duration: 260, onComplete: () => ring.destroy() });
     for (let i = 0; i < n; i++) {
@@ -357,6 +536,7 @@ export class FightScene extends Phaser.Scene {
   }
 
   private dust(x: number, y: number) {
+    this.record({ k: 'dust', x: Math.round(x), y: Math.round(y) });
     for (let i = 0; i < 10; i++) {
       const c = this.add.circle(x, y - 6, 10 + Math.random() * 12, 0xc8b8d8, 0.6).setDepth(66);
       const side = i % 2 === 0 ? 1 : -1;
@@ -368,6 +548,7 @@ export class FightScene extends Phaser.Scene {
   }
 
   private spike(x: number) {
+    this.record({ k: 'spike', x: Math.round(x) });
     const g = this.add.graphics({ x, y: GROUND_Y }).setDepth(65);
     g.fillStyle(0x3d2a55, 1).fillTriangle(-80, 0, 80, 0, -5, -260);
     g.fillStyle(0x6b4f8f, 1).fillTriangle(-5, -260, 80, 0, 20, 0);

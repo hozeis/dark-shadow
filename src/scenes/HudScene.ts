@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import type { FightScene } from './FightScene';
 import type { Fighter } from '../game/Fighter';
 import { FONT, MAX_HP, P1_KEYS, P2_KEYS, WINS_NEEDED } from '../config';
+import { net } from '../net/NetSession';
+import { isTouchDevice } from './TouchScene';
 
 /** Health bars, timer, shadow meters and big announcements. Drawn on top, never zooms. */
 export class HudScene extends Phaser.Scene {
@@ -16,6 +18,8 @@ export class HudScene extends Phaser.Scene {
   private bannerBg!: Phaser.GameObjects.Rectangle;
   private bannerTitle!: Phaser.GameObjects.Text;
   private bannerSub!: Phaser.GameObjects.Text;
+  private onlineText!: Phaser.GameObjects.Text;
+  private touch = false;
   private annId = 0;
   private bannerId = 0;
 
@@ -40,6 +44,10 @@ export class HudScene extends Phaser.Scene {
 
     this.meterText[0] = this.add.text(60, 618, '', style(24, '#d9c4ff'));
     this.meterText[1] = this.add.text(1220, 618, '', style(24, '#d9c4ff')).setOrigin(1, 0);
+
+    this.touch = isTouchDevice(this.game);
+    this.onlineText = this.add.text(640, 96, '', style(18, '#a8ffb3')).setOrigin(0.5);
+    if (this.touch) for (const t of this.meterText) t.setVisible(false); // the SHADOW button glows instead
 
     this.annText = this.add.text(640, 320, '', style(130)).setOrigin(0.5).setAlpha(0);
     this.hint = this.add.text(640, 440, 'ENTER — Rematch      ESC — Menu', style(34)).setOrigin(0.5).setVisible(false);
@@ -70,8 +78,14 @@ export class HudScene extends Phaser.Scene {
       this.pip(728 + i * 26, 82, f.p2.wins > i);
     }
 
-    this.drawMeter(0, f.p1, 60, 650, 320, false, time, P1_KEYS.ult);
-    this.drawMeter(1, f.p2, 900, 650, 320, true, time, P2_KEYS.ult);
+    // On phones the thumbs cover the bottom of the screen, so the meters go under the health bars
+    if (this.touch) {
+      this.drawMeter(0, f.p1, 60, 112, 260, false, time, P1_KEYS.ult);
+      this.drawMeter(1, f.p2, 960, 112, 260, true, time, P2_KEYS.ult);
+    } else {
+      this.drawMeter(0, f.p1, 60, 650, 320, false, time, P1_KEYS.ult);
+      this.drawMeter(1, f.p2, 900, 650, 320, true, time, P2_KEYS.ult);
+    }
 
     // Announcements (ROUND 1, FIGHT!, K.O.!)
     if (f.announcement.id !== this.annId) {
@@ -82,7 +96,13 @@ export class HudScene extends Phaser.Scene {
       this.tweens.add({ targets: this.annText, scale: 1, duration: 260, ease: 'Back.easeOut' });
       if (!a.hold) this.tweens.add({ targets: this.annText, alpha: 0, delay: 950, duration: 300 });
     }
-    this.hint.setVisible(f.roundState === 'matchEnd');
+    this.hint.setVisible(f.roundState === 'matchEnd' && !this.touch);
+    const s = net.session;
+    this.onlineText.setText(
+      (f.mode === 'host' || f.mode === 'guest') && s
+        ? `ONLINE · ROOM ${s.code} · YOU ARE ${f.mode === 'host' ? 'LEFT' : 'RIGHT'} · ${s.ping} MS`
+        : '',
+    );
 
     // Ultimate banner
     if (f.banner.id !== this.bannerId) {
@@ -134,7 +154,7 @@ export class HudScene extends Phaser.Scene {
       : null;
     g.fillStyle(color ? Phaser.Display.Color.GetColor(color.r, color.g, color.b) : p.def.shadowGlow, 1);
     g.fillRect(rightSide ? x + w - bw : x, y, bw, h);
-    this.meterText[i].setText(full ? `SHADOW READY!  [${key}]` : `${p.def.shadowName}`);
+    this.meterText[i].setText(full ? (this.touch ? 'SHADOW READY!' : `SHADOW READY!  [${key}]`) : `${p.def.shadowName}`);
     this.meterText[i].setColor(full ? '#ffffff' : '#bfa8ee');
   }
 
